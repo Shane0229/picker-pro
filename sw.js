@@ -1,0 +1,25 @@
+const CACHE = 'picker-pro-shell-v1';
+const SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+// Only cache the app shell itself - never cache API calls, so pick lists
+// and images are always fresh.
+self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('/api/')) return;
+  e.respondWith(
+    caches.match(e.request).then((cached) => cached || fetch(e.request))
+  );
+});

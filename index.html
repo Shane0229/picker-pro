@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Picker Pro</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#15130F">
+<style>
+  :root{
+    --bg:#15130F;
+    --surface:#201C15;
+    --surface-2:#2A251C;
+    --amber:#E8A03C;
+    --amber-dim:#7A5A26;
+    --green:#4CAF6E;
+    --red:#E05B4F;
+    --ink:#F2EDE2;
+    --ink-dim:#9A9384;
+    --radius:22px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden; overscroll-behavior:none;
+  }
+  #app{
+    display:flex; flex-direction:column; height:100dvh;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
+  }
+
+  /* ---------- Top bar ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px 8px;
+    flex-shrink:0;
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .brand .dot{
+    width:10px;height:10px;border-radius:50%;background:var(--amber);
+    display:inline-block;
+  }
+  .brand h1{font-size:17px; margin:0; font-weight:700; letter-spacing:0.2px;}
+  .brand .sub{font-size:11px; color:var(--ink-dim); font-weight:500;}
+  .icon-btn{
+    background:var(--surface); border:none; color:var(--ink);
+    width:38px; height:38px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px; cursor:pointer;
+  }
+  .progress-wrap{
+    padding:0 18px 10px; flex-shrink:0;
+  }
+  .progress-bar{
+    height:5px; background:var(--surface); border-radius:99px; overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; background:var(--amber); width:0%;
+    transition:width .25s ease;
+  }
+  .progress-label{
+    display:flex; justify-content:space-between;
+    font-size:11.5px; color:var(--ink-dim); margin-top:6px; font-weight:600;
+    letter-spacing:0.3px;
+  }
+
+  /* ---------- Card stack ---------- */
+  #stack{
+    flex:1; position:relative; padding:6px 18px 4px;
+    display:flex; align-items:center; justify-content:center;
+    min-height:0;
+  }
+  .card{
+    position:absolute; width:calc(100% - 36px); max-width:460px; height:100%;
+    max-height:100%;
+    background:var(--surface);
+    border-radius:var(--radius);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.45);
+    will-change:transform;
+    touch-action:none;
+  }
+  .card .img-wrap{
+    flex:1; position:relative; background:#0E0C09;
+    min-height:0;
+  }
+  .card img{
+    width:100%; height:100%; object-fit:contain; display:block;
+    background:#0E0C09;
+  }
+  .card .no-img{
+    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-dim); font-size:14px; flex-direction:column; gap:8px;
+  }
+  .no-img .glyph{font-size:40px;}
+
+  .stamp{
+    position:absolute; top:22px; padding:8px 18px; font-weight:800; font-size:22px;
+    border:4px solid; border-radius:10px; letter-spacing:2px; text-transform:uppercase;
+    opacity:0; transform:rotate(-12deg);
+    pointer-events:none;
+  }
+  .stamp.pick{ left:22px; color:var(--green); border-color:var(--green); }
+  .stamp.skip{ right:22px; color:var(--red); border-color:var(--red); transform:rotate(12deg); }
+
+  .card .footer{
+    flex-shrink:0; padding:14px 16px 16px;
+    background:var(--surface);
+  }
+  .loc-badge{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--amber); color:#1A1204;
+    font-weight:800; font-size:26px; letter-spacing:0.5px;
+    padding:8px 16px; border-radius:12px;
+  }
+  .card .title{
+    margin-top:10px; font-size:13.5px; color:var(--ink-dim);
+    line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .card .meta-row{
+    margin-top:8px; display:flex; gap:8px; align-items:center;
+  }
+  .qty-chip{
+    background:var(--surface-2); color:var(--ink-dim); font-size:11.5px;
+    font-weight:700; padding:4px 9px; border-radius:99px;
+  }
+
+  /* ---------- Empty / done state ---------- */
+  #empty{
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:10px; padding:0 30px;
+    flex:1;
+  }
+  #empty .glyph{font-size:52px;}
+  #empty h2{margin:4px 0 0; font-size:20px;}
+  #empty p{margin:0; color:var(--ink-dim); font-size:14px;}
+  #empty .stats{
+    display:flex; gap:24px; margin-top:18px;
+  }
+  #empty .stat{ text-align:center; }
+  #empty .stat b{ display:block; font-size:28px; color:var(--amber); }
+  #empty .stat span{ font-size:11.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* ---------- Direction select ---------- */
+  #direction-select{
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:6px; padding:0 28px;
+    flex:1;
+  }
+  #direction-select .glyph{font-size:44px; margin-bottom:2px;}
+  #direction-select h2{margin:0; font-size:19px;}
+  #direction-select p#direction-count{margin:0 0 18px; color:var(--ink-dim); font-size:13.5px;}
+  .dir-buttons{
+    width:100%; max-width:360px; display:flex; flex-direction:column; gap:12px;
+  }
+  .dir-btn{
+    display:flex; align-items:center; gap:14px;
+    background:var(--surface); border:1.5px solid #3A3324; color:var(--ink);
+    padding:16px 18px; border-radius:16px; cursor:pointer; text-align:left;
+  }
+  .dir-btn:active{ background:var(--surface-2); border-color:var(--amber); }
+  .dir-arrow{ font-size:24px; color:var(--amber); font-weight:800; flex-shrink:0; width:26px; text-align:center; }
+  .dir-btn .dir-text{ display:flex; flex-direction:column; gap:2px; }
+  .dir-btn .dir-label{ font-weight:700; font-size:14.5px; }
+  .dir-btn .dir-sub{ font-size:12px; color:var(--ink-dim); }
+  .dir-hint{ margin-top:18px; font-size:12px; color:var(--ink-dim); max-width:280px; }
+
+  /* ---------- Bottom controls ---------- */
+  #controls{
+    flex-shrink:0; display:none; align-items:center; justify-content:center;
+    gap:26px; padding:14px 0 22px;
+  }
+  .ctrl-btn{
+    width:64px; height:64px; border-radius:50%; border:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:26px; cursor:pointer;
+  }
+  .ctrl-btn.skip{ background:var(--surface); color:var(--red); border:2px solid var(--red); }
+  .ctrl-btn.pick{ background:var(--green); color:#0C1A10; }
+  .ctrl-btn.small{
+    width:46px; height:46px; background:var(--surface); color:var(--ink-dim); font-size:18px;
+    border:none;
+  }
+
+  /* ---------- Loading / error ---------- */
+  #status{
+    flex:1; display:none; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; padding:0 30px; text-align:center;
+  }
+  #status .spinner{
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid var(--surface-2); border-top-color:var(--amber);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  #status p{ color:var(--ink-dim); font-size:14px; margin:0; }
+  #status button{
+    margin-top:6px; background:var(--amber); color:#1A1204; border:none;
+    font-weight:700; padding:10px 20px; border-radius:12px; font-size:14px; cursor:pointer;
+  }
+
+  /* ---------- Settings sheet ---------- */
+  #settings-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.6);
+    display:none; align-items:flex-end; z-index:50;
+  }
+  #settings-sheet{
+    width:100%; background:var(--surface); border-radius:20px 20px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+  }
+  #settings-sheet h3{ margin:0 0 4px; font-size:16px; }
+  #settings-sheet p.hint{ margin:0 0 14px; font-size:12.5px; color:var(--ink-dim); }
+  #settings-sheet label{ font-size:12px; color:var(--ink-dim); font-weight:600; }
+  #settings-sheet input{
+    width:100%; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink);
+    padding:12px 14px; border-radius:12px; font-size:15px; margin:6px 0 16px;
+  }
+  #settings-sheet .row{ display:flex; gap:10px; }
+  #settings-sheet button{
+    flex:1; padding:13px; border-radius:12px; border:none; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  #settings-sheet .save{ background:var(--amber); color:#1A1204; }
+  #settings-sheet .cancel{ background:var(--surface-2); color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>Picker Pro</h1>
+        <div class="sub" id="brand-sub">GameJunkie</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="settings-btn" aria-label="Settings">⚙</button>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-label">
+      <span id="progress-text">0 of 0</span>
+      <span id="picked-text">0 picked</span>
+    </div>
+  </div>
+
+  <div id="stack"></div>
+
+  <div id="status">
+    <div class="spinner"></div>
+    <p id="status-text">Loading pick list…</p>
+  </div>
+
+  <div id="empty">
+    <div class="glyph">📦</div>
+    <h2 id="empty-title">All picked!</h2>
+    <p id="empty-sub">Nice work — everything's off the shelf.</p>
+    <div class="stats">
+      <div class="stat"><b id="stat-picked">0</b><span>Picked</span></div>
+      <div class="stat"><b id="stat-remaining">0</b><span>Remaining</span></div>
+    </div>
+  </div>
+
+  <div id="direction-select">
+    <div class="glyph">🤝</div>
+    <h2>Two people picking?</h2>
+    <p id="direction-count">0 items ready</p>
+    <div class="dir-buttons">
+      <button class="dir-btn" id="dir-start-btn">
+        <span class="dir-arrow">→</span>
+        <span class="dir-text">
+          <span class="dir-label">Start at the beginning</span>
+          <span class="dir-sub" id="dir-start-sub">A1 first</span>
+        </span>
+      </button>
+      <button class="dir-btn" id="dir-end-btn">
+        <span class="dir-arrow">←</span>
+        <span class="dir-text">
+          <span class="dir-label">Start at the end</span>
+          <span class="dir-sub" id="dir-end-sub">Last location first</span>
+        </span>
+      </button>
+    </div>
+    <p class="dir-hint">Pick from opposite ends and meet in the middle</p>
+  </div>
+
+  <div id="controls">
+    <button class="ctrl-btn small" id="undo-btn" aria-label="Undo">↺</button>
+    <button class="ctrl-btn skip" id="skip-btn" aria-label="Not picked">✕</button>
+    <button class="ctrl-btn pick" id="pick-btn" aria-label="Picked">✓</button>
+    <button class="ctrl-btn small" id="refresh-btn" aria-label="Refresh">⟳</button>
+  </div>
+
+</div>
+
+<div id="settings-overlay">
+  <div id="settings-sheet">
+    <h3>Proxy connection</h3>
+    <p class="hint">The URL of your eBay proxy (Cloudflare Tunnel or local address).</p>
+    <label>Proxy URL</label>
+    <input id="proxy-url-input" placeholder="https://your-tunnel.trycloudflare.com" autocapitalize="off" autocorrect="off">
+    <div class="row">
+      <button class="cancel" id="settings-cancel">Cancel</button>
+      <button class="save" id="settings-save">Save &amp; Reload</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const els = {
+    stack: document.getElementById('stack'),
+    status: document.getElementById('status'),
+    statusText: document.getElementById('status-text'),
+    empty: document.getElementById('empty'),
+    emptyTitle: document.getElementById('empty-title'),
+    emptySub: document.getElementById('empty-sub'),
+    statPicked: document.getElementById('stat-picked'),
+    statRemaining: document.getElementById('stat-remaining'),
+    progressFill: document.getElementById('progress-fill'),
+    progressText: document.getElementById('progress-text'),
+    pickedText: document.getElementById('picked-text'),
+    controls: document.getElementById('controls'),
+    pickBtn: document.getElementById('pick-btn'),
+    skipBtn: document.getElementById('skip-btn'),
+    undoBtn: document.getElementById('undo-btn'),
+    refreshBtn: document.getElementById('refresh-btn'),
+    directionSelect: document.getElementById('direction-select'),
+    directionCount: document.getElementById('direction-count'),
+    dirStartBtn: document.getElementById('dir-start-btn'),
+    dirEndBtn: document.getElementById('dir-end-btn'),
+    dirStartSub: document.getElementById('dir-start-sub'),
+    dirEndSub: document.getElementById('dir-end-sub'),
+    settingsBtn: document.getElementById('settings-btn'),
+    settingsOverlay: document.getElementById('settings-overlay'),
+    settingsSave: document.getElementById('settings-save'),
+    settingsCancel: document.getElementById('settings-cancel'),
+    proxyInput: document.getElementById('proxy-url-input'),
+  };
+
+  let rawItems = [];       // items as loaded from the server, in normal pick order
+  let queue = [];          // items still to pick (front = current card)
+  let totalCount = 0;
+  let pickedCount = 0;
+  let history = [];        // for undo: {item, action}
+
+  function getProxyUrl(){
+    return localStorage.getItem('picker_proxy_url') || '';
+  }
+
+  function setProxyUrl(url){
+    localStorage.setItem('picker_proxy_url', url.replace(/\/+$/,''));
+  }
+
+  // ---------------- Settings sheet ----------------
+  els.settingsBtn.addEventListener('click', () => {
+    els.proxyInput.value = getProxyUrl();
+    els.settingsOverlay.style.display = 'flex';
+  });
+  els.settingsCancel.addEventListener('click', () => {
+    els.settingsOverlay.style.display = 'none';
+  });
+  els.settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === els.settingsOverlay) els.settingsOverlay.style.display = 'none';
+  });
+  els.settingsSave.addEventListener('click', () => {
+    setProxyUrl(els.proxyInput.value.trim());
+    els.settingsOverlay.style.display = 'none';
+    loadPickList();
+  });
+
+  // ---------------- Loading ----------------
+  function showStatus(text){
+    els.status.style.display = 'flex';
+    els.empty.style.display = 'none';
+    els.directionSelect.style.display = 'none';
+    els.controls.style.display = 'none';
+    els.stack.innerHTML = '';
+    els.statusText.textContent = text;
+  }
+
+  function showError(text){
+    els.status.style.display = 'flex';
+    els.statusText.innerHTML = text + '<br><button id="retry-btn">Try again</button>';
+    document.getElementById('retry-btn').addEventListener('click', loadPickList);
+  }
+
+  async function loadPickList(){
+    const base = getProxyUrl();
+    if (!base){
+      showError('No proxy connected yet.<br>Tap the ⚙ icon to set it up.');
+      return;
+    }
+    showStatus('Loading pick list…');
+    try {
+      const res = await fetch(base + '/api/pick-list');
+      if (!res.ok){
+        const body = await res.json().catch(()=>({}));
+        throw new Error(body.error || ('Server returned ' + res.status));
+      }
+      const data = await res.json();
+      rawItems = data.items || [];
+      pickedCount = 0;
+      history = [];
+      els.status.style.display = 'none';
+      showDirectionSelect();
+    } catch (err){
+      showError('Couldn\'t reach the proxy.<br>' + escapeHtml(err.message));
+    }
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ---------------- Direction select ----------------
+  function showDirectionSelect(){
+    els.stack.innerHTML = '';
+    els.status.style.display = 'none';
+    els.empty.style.display = 'none';
+    els.controls.style.display = 'none';
+
+    if (rawItems.length === 0){
+      totalCount = 0;
+      queue = [];
+      els.controls.style.display = 'flex';
+      render();
+      return;
+    }
+
+    els.directionSelect.style.display = 'flex';
+    els.directionCount.textContent = rawItems.length + (rawItems.length === 1 ? ' item ready' : ' items ready');
+    els.dirStartSub.textContent = rawItems[0].location + ' first';
+    els.dirEndSub.textContent = rawItems[rawItems.length - 1].location + ' first';
+  }
+
+  function beginSession(direction){
+    queue = direction === 'end' ? rawItems.slice().reverse() : rawItems.slice();
+    totalCount = queue.length;
+    els.directionSelect.style.display = 'none';
+    els.controls.style.display = 'flex';
+    render();
+  }
+
+  els.dirStartBtn.addEventListener('click', () => beginSession('start'));
+  els.dirEndBtn.addEventListener('click', () => beginSession('end'));
+
+  // ---------------- Rendering ----------------
+  function updateProgress(){
+    const done = totalCount - queue.length;
+    const pct = totalCount ? Math.round((pickedCount / totalCount) * 100) : 0;
+    els.progressFill.style.width = pct + '%';
+    els.progressText.textContent = done + ' of ' + totalCount;
+    els.pickedText.textContent = pickedCount + ' picked';
+  }
+
+  function render(){
+    updateProgress();
+    els.stack.innerHTML = '';
+
+    if (queue.length === 0){
+      els.empty.style.display = 'flex';
+      const remaining = queue.length;
+      els.statPicked.textContent = pickedCount;
+      els.statRemaining.textContent = remaining;
+      els.emptyTitle.textContent = totalCount === 0 ? 'Nothing to pick' : 'All picked!';
+      els.emptySub.textContent = totalCount === 0
+        ? 'No unshipped orders right now.'
+        : 'Nice work — everything\'s off the shelf.';
+      return;
+    }
+
+    els.empty.style.display = 'none';
+
+    // Render up to 3 cards for a stacked look, current on top, drawn back-to-front
+    for (let i = Math.min(2, queue.length - 1); i >= 0; i--){
+      els.stack.appendChild(buildCard(queue[i], i));
+    }
+  }
+
+  function buildCard(item, stackIndex){
+    const card = document.createElement('div');
+    card.className = 'card';
+    const scale = 1 - stackIndex * 0.035;
+    const yOff = stackIndex * 10;
+    card.style.transform = 'translateY(' + yOff + 'px) scale(' + scale + ')';
+    card.style.zIndex = 10 - stackIndex;
+    card.style.opacity = stackIndex === 2 ? '0.6' : '1';
+
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'img-wrap';
+    if (item.image){
+      const img = document.createElement('img');
+      img.src = item.image;
+      img.alt = item.title || item.location;
+      img.draggable = false;
+      imgWrap.appendChild(img);
+    } else {
+      imgWrap.innerHTML = '<div class="no-img"><div class="glyph">🎞️</div><div>No image available</div></div>';
+    }
+
+    const pickStamp = document.createElement('div');
+    pickStamp.className = 'stamp pick';
+    pickStamp.textContent = 'PICKED';
+    const skipStamp = document.createElement('div');
+    skipStamp.className = 'stamp skip';
+    skipStamp.textContent = 'SKIP';
+    imgWrap.appendChild(pickStamp);
+    imgWrap.appendChild(skipStamp);
+
+    const footer = document.createElement('div');
+    footer.className = 'footer';
+    footer.innerHTML =
+      '<span class="loc-badge">📍 ' + escapeHtml(item.location) + '</span>' +
+      (item.title ? '<div class="title">' + escapeHtml(item.title) + '</div>' : '') +
+      '<div class="meta-row">' +
+        (item.qty > 1 ? '<span class="qty-chip">Qty ' + item.qty + '</span>' : '') +
+        (item.condition ? '<span class="qty-chip">' + escapeHtml(item.condition) + '</span>' : '') +
+      '</div>';
+
+    card.appendChild(imgWrap);
+    card.appendChild(footer);
+
+    if (stackIndex === 0){
+      attachSwipe(card, item, pickStamp, skipStamp);
+    }
+
+    return card;
+  }
+
+  // ---------------- Swipe gesture (top card only) ----------------
+  function attachSwipe(card, item, pickStamp, skipStamp){
+    let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
+
+    function onDown(x, y){
+      dragging = true;
+      startX = x; startY = y;
+      card.style.transition = 'none';
+    }
+    function onMove(x, y){
+      if (!dragging) return;
+      dx = x - startX; dy = y - startY;
+      const rot = dx / 18;
+      card.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + rot + 'deg)';
+      const progress = Math.min(Math.abs(dx) / 120, 1);
+      if (dx > 0){
+        pickStamp.style.opacity = progress;
+        skipStamp.style.opacity = 0;
+      } else {
+        skipStamp.style.opacity = progress;
+        pickStamp.style.opacity = 0;
+      }
+    }
+    function onUp(){
+      if (!dragging) return;
+      dragging = false;
+      card.style.transition = 'transform .28s ease';
+      const threshold = 110;
+      if (dx > threshold){
+        commitSwipe(card, 'pick', item);
+      } else if (dx < -threshold){
+        commitSwipe(card, 'skip', item);
+      } else {
+        card.style.transform = 'translate(0,0) rotate(0)';
+        pickStamp.style.opacity = 0;
+        skipStamp.style.opacity = 0;
+      }
+      dx = 0; dy = 0;
+    }
+
+    card.addEventListener('pointerdown', (e) => { card.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
+    card.addEventListener('pointermove', (e) => onMove(e.clientX, e.clientY));
+    card.addEventListener('pointerup', onUp);
+    card.addEventListener('pointercancel', onUp);
+  }
+
+  function commitSwipe(card, action, item){
+    const flyX = action === 'pick' ? window.innerWidth : -window.innerWidth;
+    card.style.transform = 'translate(' + flyX + 'px, -40px) rotate(' + (action === 'pick' ? 20 : -20) + 'deg)';
+    card.style.opacity = '0';
+    setTimeout(() => applyAction(action, item), 180);
+  }
+
+  function applyAction(action, item){
+    // Remove current item from front of queue
+    const idx = queue.indexOf(item);
+    if (idx !== -1) queue.splice(idx, 1);
+
+    history.push({ item, action });
+
+    if (action === 'pick'){
+      pickedCount++;
+    } else {
+      queue.push(item); // requeue at the back
+    }
+    render();
+  }
+
+  function currentItem(){
+    return queue[0];
+  }
+
+  els.pickBtn.addEventListener('click', () => {
+    const item = currentItem();
+    if (!item) return;
+    const card = els.stack.querySelector('.card');
+    if (card) commitSwipe(card, 'pick', item);
+  });
+  els.skipBtn.addEventListener('click', () => {
+    const item = currentItem();
+    if (!item) return;
+    const card = els.stack.querySelector('.card');
+    if (card) commitSwipe(card, 'skip', item);
+  });
+  els.undoBtn.addEventListener('click', () => {
+    const last = history.pop();
+    if (!last) return;
+    if (last.action === 'pick'){
+      pickedCount = Math.max(0, pickedCount - 1);
+      queue.unshift(last.item);
+    } else {
+      const idx = queue.lastIndexOf(last.item);
+      if (idx !== -1) queue.splice(idx, 1);
+      queue.unshift(last.item);
+    }
+    render();
+  });
+  els.refreshBtn.addEventListener('click', loadPickList);
+
+  // Keyboard support for desktop use
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') els.pickBtn.click();
+    if (e.key === 'ArrowLeft') els.skipBtn.click();
+  });
+
+  // ---------------- Init ----------------
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+
+  if (!getProxyUrl()){
+    showError('No proxy connected yet.<br>Tap the ⚙ icon to set it up.');
+  } else {
+    loadPickList();
+  }
+})();
+</script>
+</body>
+</html>
