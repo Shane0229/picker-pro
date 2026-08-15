@@ -85,8 +85,7 @@
     display:flex; flex-direction:column;
     overflow:hidden;
     box-shadow:0 12px 40px rgba(0,0,0,.45);
-    will-change:transform;
-    touch-action:none;
+    transition:transform .28s ease, opacity .28s ease;
   }
   .card .img-wrap{
     flex:1; position:relative; background:#0E0C09;
@@ -177,19 +176,29 @@
 
   /* ---------- Bottom controls ---------- */
   #controls{
-    flex-shrink:0; display:none; align-items:center; justify-content:center;
-    gap:26px; padding:14px 0 22px;
+    flex-shrink:0; display:none; flex-direction:column;
+    gap:8px; padding:10px 16px calc(14px + env(safe-area-inset-bottom));
   }
-  .ctrl-btn{
-    width:64px; height:64px; border-radius:50%; border:none;
-    display:flex; align-items:center; justify-content:center;
-    font-size:26px; cursor:pointer;
+  .big-buttons{
+    display:flex; gap:12px;
   }
-  .ctrl-btn.skip{ background:var(--surface); color:var(--red); border:2px solid var(--red); }
-  .ctrl-btn.pick{ background:var(--green); color:#0C1A10; }
+  .big-btn{
+    flex:1; border:none; border-radius:20px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:4px; padding:20px 0; cursor:pointer;
+    font-weight:800; font-size:15px; letter-spacing:0.5px; text-transform:uppercase;
+  }
+  .big-btn .big-icon{ font-size:34px; line-height:1; }
+  .big-btn.skip{ background:var(--surface); color:var(--red); border:2.5px solid var(--red); }
+  .big-btn.skip:active{ background:rgba(224,91,79,0.15); }
+  .big-btn.pick{ background:var(--green); color:#0C1A10; }
+  .big-btn.pick:active{ background:#3d9a5b; }
+  .small-row{
+    display:flex; justify-content:center; gap:22px; padding-top:2px;
+  }
   .ctrl-btn.small{
-    width:46px; height:46px; background:var(--surface); color:var(--ink-dim); font-size:18px;
-    border:none;
+    width:40px; height:40px; background:var(--surface); color:var(--ink-dim); font-size:16px;
+    border:none; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
 
   /* ---------- Loading / error ---------- */
@@ -296,10 +305,20 @@
   </div>
 
   <div id="controls">
-    <button class="ctrl-btn small" id="undo-btn" aria-label="Undo">↺</button>
-    <button class="ctrl-btn skip" id="skip-btn" aria-label="Not picked">✕</button>
-    <button class="ctrl-btn pick" id="pick-btn" aria-label="Picked">✓</button>
-    <button class="ctrl-btn small" id="refresh-btn" aria-label="Refresh">⟳</button>
+    <div class="big-buttons">
+      <button class="big-btn skip" id="skip-btn" aria-label="Not picked">
+        <span class="big-icon">✕</span>
+        <span>Not picked</span>
+      </button>
+      <button class="big-btn pick" id="pick-btn" aria-label="Picked">
+        <span class="big-icon">✓</span>
+        <span>Picked</span>
+      </button>
+    </div>
+    <div class="small-row">
+      <button class="ctrl-btn small" id="undo-btn" aria-label="Undo">↺</button>
+      <button class="ctrl-btn small" id="refresh-btn" aria-label="Refresh">⟳</button>
+    </div>
   </div>
 
 </div>
@@ -536,57 +555,15 @@
     card.appendChild(imgWrap);
     card.appendChild(footer);
 
-    if (stackIndex === 0){
-      attachSwipe(card, item, pickStamp, skipStamp);
-    }
-
     return card;
   }
 
-  // ---------------- Swipe gesture (top card only) ----------------
-  function attachSwipe(card, item, pickStamp, skipStamp){
-    let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
-
-    function onDown(x, y){
-      dragging = true;
-      startX = x; startY = y;
-      card.style.transition = 'none';
-    }
-    function onMove(x, y){
-      if (!dragging) return;
-      dx = x - startX; dy = y - startY;
-      const rot = dx / 18;
-      card.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + rot + 'deg)';
-      const progress = Math.min(Math.abs(dx) / 120, 1);
-      if (dx > 0){
-        pickStamp.style.opacity = progress;
-        skipStamp.style.opacity = 0;
-      } else {
-        skipStamp.style.opacity = progress;
-        pickStamp.style.opacity = 0;
-      }
-    }
-    function onUp(){
-      if (!dragging) return;
-      dragging = false;
-      card.style.transition = 'transform .28s ease';
-      const threshold = 110;
-      if (dx > threshold){
-        commitSwipe(card, 'pick', item);
-      } else if (dx < -threshold){
-        commitSwipe(card, 'skip', item);
-      } else {
-        card.style.transform = 'translate(0,0) rotate(0)';
-        pickStamp.style.opacity = 0;
-        skipStamp.style.opacity = 0;
-      }
-      dx = 0; dy = 0;
-    }
-
-    card.addEventListener('pointerdown', (e) => { card.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY); });
-    card.addEventListener('pointermove', (e) => onMove(e.clientX, e.clientY));
-    card.addEventListener('pointerup', onUp);
-    card.addEventListener('pointercancel', onUp);
+  function flashStamp(action){
+    const card = els.stack.querySelector('.card');
+    if (!card) return null;
+    const stamp = card.querySelector(action === 'pick' ? '.stamp.pick' : '.stamp.skip');
+    if (stamp) stamp.style.opacity = '1';
+    return card;
   }
 
   function commitSwipe(card, action, item){
@@ -618,13 +595,13 @@
   els.pickBtn.addEventListener('click', () => {
     const item = currentItem();
     if (!item) return;
-    const card = els.stack.querySelector('.card');
+    const card = flashStamp('pick');
     if (card) commitSwipe(card, 'pick', item);
   });
   els.skipBtn.addEventListener('click', () => {
     const item = currentItem();
     if (!item) return;
-    const card = els.stack.querySelector('.card');
+    const card = flashStamp('skip');
     if (card) commitSwipe(card, 'skip', item);
   });
   els.undoBtn.addEventListener('click', () => {
