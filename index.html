@@ -373,8 +373,9 @@
   let rawItems = [];       // items as loaded from the server, in normal pick order
   let queue = [];          // items still to pick (front = current card)
   let totalCount = 0;
-  let pickedCount = 0;
+  let pickedIds = new Set(); // orderLineItemIds picked by anyone (this device or a teammate's)
   let history = [];        // for undo: {item, action}
+  let pollTimer = null;
 
   function getProxyUrl(){
     return localStorage.getItem('picker_proxy_url') || '';
@@ -432,13 +433,46 @@
       }
       const data = await res.json();
       rawItems = data.items || [];
-      pickedCount = 0;
+      pickedIds = new Set();
       history = [];
+
+      // Pick up anything a teammate's already marked as picked, so it
+      // doesn't show up again on this device
+      try {
+        const sessionRes = await fetch(base + '/api/session-status');
+        if (sessionRes.ok){
+          const sessionData = await sessionRes.json();
+          (sessionData.picked || []).forEach(id => pickedIds.add(id));
+        }
+      } catch (e){ /* non-fatal - session sync is a bonus, not required */ }
+
       els.status.style.display = 'none';
       showDirectionSelect();
+      startPolling(base);
     } catch (err){
       showError('Couldn\'t reach the proxy.<br>' + escapeHtml(err.message));
     }
+  }
+
+  function startPolling(base){
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(base + '/api/session-status');
+        if (!res.ok) return;
+        const data = await res.json();
+        let changed = false;
+        (data.picked || []).forEach(id => {
+          if (!pickedIds.has(id)){
+            pickedIds.add(id);
+            const idx = queue.findIndex(it => it.orderLineItemId === id);
+            if (idx !== -1) queue.splice(idx, 1);
+            changed = true;
+          }
+        });
+        if (changed) render();
+      } catch (e){ /* quietly retry next interval */ }
+    }, 6000);
   }
 
   function escapeHtml(s){
@@ -454,8 +488,10 @@
     els.empty.style.display = 'none';
     els.controls.style.display = 'none';
 
-    if (rawItems.length === 0){
-      totalCount = 0;
+    const availableItems = rawItems.filter(it => !pickedIds.has(it.orderLineItemId));
+
+    if (availableItems.length === 0){
+      totalCount = rawItems.length;
       queue = [];
       els.controls.style.display = 'flex';
       render();
@@ -463,14 +499,16 @@
     }
 
     els.directionSelect.style.display = 'flex';
-    els.directionCount.textContent = rawItems.length + (rawItems.length === 1 ? ' item ready' : ' items ready');
-    els.dirStartSub.textContent = rawItems[0].location + ' first';
-    els.dirEndSub.textContent = rawItems[rawItems.length - 1].location + ' first';
+    els.directionCount.textContent = availableItems.length + (availableItems.length === 1 ? ' item ready' : ' items ready') +
+      (pickedIds.size > 0 ? ' · ' + pickedIds.size + ' already picked' : '');
+    els.dirStartSub.textContent = availableItems[0].location + ' first';
+    els.dirEndSub.textContent = availableItems[availableItems.length - 1].location + ' first';
   }
 
   function beginSession(direction){
-    queue = direction === 'end' ? rawItems.slice().reverse() : rawItems.slice();
-    totalCount = queue.length;
+    const availableItems = rawItems.filter(it => !pickedIds.has(it.orderLineItemId));
+    queue = direction === 'end' ? availableItems.slice().reverse() : availableItems.slice();
+    totalCount = rawItems.length;
     els.directionSelect.style.display = 'none';
     els.controls.style.display = 'flex';
     render();
@@ -481,11 +519,10 @@
 
   // ---------------- Rendering ----------------
   function updateProgress(){
-    const done = totalCount - queue.length;
-    const pct = totalCount ? Math.round((pickedCount / totalCount) * 100) : 0;
+    const pct = totalCount ? Math.round((pickedIds.size / totalCount) * 100) : 0;
     els.progressFill.style.width = pct + '%';
-    els.progressText.textContent = done + ' of ' + totalCount;
-    els.pickedText.textContent = pickedCount + ' picked';
+    els.progressText.textContent = pickedIds.size + ' of ' + totalCount;
+    els.pickedText.textContent = pickedIds.size + ' picked';
   }
 
   function render(){
@@ -495,7 +532,7 @@
     if (queue.length === 0){
       els.empty.style.display = 'flex';
       const remaining = queue.length;
-      els.statPicked.textContent = pickedCount;
+      els.statPicked.textContent = pickedIds.size;
       els.statRemaining.textContent = remaining;
       els.emptyTitle.textContent = totalCount === 0 ? 'Nothing to pick' : 'All picked!';
       els.emptySub.textContent = totalCount === 0
@@ -581,11 +618,32 @@
     history.push({ item, action });
 
     if (action === 'pick'){
-      pickedCount++;
+      pickedIds.add(item.orderLineItemId);
+      reportPick(item.orderLineItemId);
     } else {
       queue.push(item); // requeue at the back
     }
     render();
+  }
+
+  function reportPick(orderLineItemId){
+    const base = getProxyUrl();
+    if (!base) return;
+    fetch(base + '/api/session-mark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderLineItemId })
+    }).catch(() => { /* if this fails, the next poll on the other device just won't see it yet - not fatal */ });
+  }
+
+  function reportUnpick(orderLineItemId){
+    const base = getProxyUrl();
+    if (!base) return;
+    fetch(base + '/api/session-unmark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderLineItemId })
+    }).catch(() => {});
   }
 
   function currentItem(){
@@ -608,7 +666,8 @@
     const last = history.pop();
     if (!last) return;
     if (last.action === 'pick'){
-      pickedCount = Math.max(0, pickedCount - 1);
+      pickedIds.delete(last.item.orderLineItemId);
+      reportUnpick(last.item.orderLineItemId);
       queue.unshift(last.item);
     } else {
       const idx = queue.lastIndexOf(last.item);
