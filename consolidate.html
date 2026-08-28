@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Box Consolidator</title>
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,45 +18,49 @@
     --red:#E05B4F;
     --ink:#F2EDE2;
     --ink-dim:#9A9384;
-    --radius:18px;
+    --radius:22px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{
-    margin:0; padding:0; min-height:100%;
+    margin:0; padding:0; height:100%;
     background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden; overscroll-behavior:none;
   }
   #app{
+    display:flex; flex-direction:column; height:100dvh;
     max-width:560px; margin:0 auto;
-    padding:env(safe-area-inset-top) 18px calc(40px + env(safe-area-inset-bottom));
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
   }
 
   header{
     display:flex; align-items:center; justify-content:space-between;
-    padding:18px 0 6px;
+    padding:14px 18px 4px; flex-shrink:0;
   }
   .brand{ display:flex; align-items:baseline; gap:8px; }
   .brand .dot{ width:10px;height:10px;border-radius:50%;background:var(--amber); }
   .brand h1{ font-size:17px; margin:0; font-weight:700; }
-  .brand .sub{ font-size:11px; color:var(--ink-dim); font-weight:500; }
-  a.back{ color:var(--ink-dim); font-size:13px; text-decoration:none; }
+  a.back{ color:var(--ink-dim); font-size:12.5px; text-decoration:none; }
 
-  .card{
-    background:var(--surface); border-radius:var(--radius);
-    padding:18px; margin-top:16px;
+  .csv-status{
+    padding:0 18px 10px; flex-shrink:0; font-size:11.5px; color:var(--ink-dim);
   }
+  .csv-status b{ color:var(--ink); }
+  .csv-status.stale{ color:var(--red); }
+
+  #setup{ flex:1; overflow-y:auto; padding:0 18px 18px; }
+  .card{ background:var(--surface); border-radius:var(--radius); padding:18px; margin-bottom:14px; }
   .card h2{ margin:0 0 4px; font-size:15px; }
   .card p.hint{ margin:0 0 14px; font-size:12.5px; color:var(--ink-dim); line-height:1.4; }
 
   .file-drop{
     border:1.5px dashed #3A3324; border-radius:14px;
-    padding:22px 16px; text-align:center; cursor:pointer;
-    background:var(--surface-2);
+    padding:20px 16px; text-align:center; cursor:pointer; background:var(--surface-2);
   }
   .file-drop.has-file{ border-color:var(--amber); border-style:solid; }
-  .file-drop .icon{ font-size:26px; margin-bottom:6px; }
-  .file-drop .fname{ font-size:13px; color:var(--ink); font-weight:600; word-break:break-all; }
-  .file-drop .fsub{ font-size:11.5px; color:var(--ink-dim); margin-top:4px; }
+  .file-drop .icon{ font-size:24px; margin-bottom:4px; }
+  .file-drop .fname{ font-size:13px; font-weight:600; word-break:break-all; }
+  .file-drop .fsub{ font-size:11.5px; color:var(--ink-dim); margin-top:3px; }
   input[type=file]{ display:none; }
 
   .num-row{ display:flex; gap:12px; margin-top:14px; }
@@ -67,69 +71,60 @@
     padding:12px 14px; border-radius:12px; font-size:16px; text-align:center; font-weight:700;
   }
 
-  button{
-    width:100%; padding:14px; border-radius:14px; border:none;
-    font-weight:700; font-size:14.5px; cursor:pointer; margin-top:14px;
+  button{ border:none; cursor:pointer; font-weight:700; }
+  button.primary{
+    width:100%; padding:14px; border-radius:14px; background:var(--amber); color:#1A1204;
+    font-size:14.5px; margin-top:14px;
   }
-  button.primary{ background:var(--amber); color:#1A1204; }
   button.primary:disabled{ background:var(--amber-dim); color:#3a2c14; cursor:not-allowed; }
-  button.execute{ background:var(--green); color:#0C1A10; }
-  button.execute:disabled{ background:#2f5a3f; color:#173322; cursor:not-allowed; }
-  button.secondary{ background:var(--surface-2); color:var(--ink); }
 
-  .section-label{
-    font-size:11.5px; font-weight:700; color:var(--ink-dim); text-transform:uppercase;
-    letter-spacing:0.5px; margin:18px 0 8px;
-  }
-  .move-row{
-    display:flex; align-items:center; gap:10px;
-    background:var(--surface-2); border-radius:10px; padding:10px 12px; margin-bottom:6px;
-    font-size:13.5px;
-  }
-  .move-row .box-tag{
-    background:var(--amber); color:#1A1204; font-weight:800; font-size:12.5px;
-    padding:3px 8px; border-radius:7px; flex-shrink:0;
-  }
-  .move-row .arrow{ color:var(--ink-dim); flex-shrink:0; }
-  .move-row .dest-tag{
-    background:var(--green); color:#0C1A10; font-weight:800; font-size:12.5px;
-    padding:3px 8px; border-radius:7px; flex-shrink:0;
-  }
-  .move-row .count{ color:var(--ink-dim); font-size:12px; margin-left:auto; flex-shrink:0; }
+  .progress-wrap{ padding:0 18px 10px; flex-shrink:0; }
+  .progress-bar{ height:5px; background:var(--surface); border-radius:99px; overflow:hidden; }
+  .progress-fill{ height:100%; background:var(--amber); width:0%; transition:width .25s ease; }
+  .progress-label{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink-dim); margin-top:6px; font-weight:600; }
 
-  .summary-line{ font-size:13px; color:var(--ink-dim); margin-top:4px; }
-  .summary-line b{ color:var(--ink); }
-  .warn{ color:var(--red); font-size:12.5px; margin-top:8px; }
-
-  #status{ text-align:center; padding:20px 0; color:var(--ink-dim); font-size:13.5px; }
-  .spinner{
-    width:26px; height:26px; border-radius:50%; margin:0 auto 10px;
-    border:3px solid var(--surface-2); border-top-color:var(--amber);
-    animation:spin .8s linear infinite;
+  #moveScreen{ flex:1; display:none; flex-direction:column; }
+  #moveCard{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 24px; }
+  .move-category{
+    font-size:11.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+    color:var(--ink-dim); margin-bottom:18px;
   }
+  .move-boxes{ display:flex; align-items:center; gap:18px; margin-bottom:20px; }
+  .move-box{
+    background:var(--surface); border-radius:20px; padding:26px 30px;
+    font-size:34px; font-weight:800; text-align:center; min-width:120px;
+  }
+  .move-box.source{ color:var(--red); border:2.5px solid var(--red); }
+  .move-box.dest{ color:var(--green); border:2.5px solid var(--green); background:rgba(76,175,110,0.08); }
+  .move-arrow{ font-size:28px; color:var(--ink-dim); }
+  .move-count{ font-size:16px; color:var(--ink-dim); margin-bottom:6px; }
+  .move-count b{ color:var(--ink); font-size:22px; }
+  .move-instruction{ font-size:13.5px; color:var(--ink-dim); text-align:center; max-width:320px; }
+
+  #moveControls{
+    flex-shrink:0; display:flex; gap:12px;
+    padding:14px 18px calc(18px + env(safe-area-inset-bottom));
+  }
+  #moveControls button{ flex:1; padding:18px 0; border-radius:18px; font-size:15px; }
+  .btn-skip{ background:var(--surface); color:var(--ink-dim); }
+  .btn-done{ background:var(--green); color:#0C1A10; }
+  .btn-done:disabled{ background:#2f5a3f; color:#173322; }
+
+  #doneScreen{ flex:1; display:none; flex-direction:column; align-items:center; justify-content:center; padding:0 30px; text-align:center; gap:10px; }
+  #doneScreen .glyph{ font-size:52px; }
+  #doneScreen h2{ margin:4px 0 0; font-size:20px; }
+  #doneScreen p{ margin:0; color:var(--ink-dim); font-size:14px; }
+  #doneScreen button.primary{ max-width:280px; }
+
+  #status{ flex:1; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:0 30px; text-align:center; }
+  .spinner{ width:30px; height:30px; border-radius:50%; border:3px solid var(--surface-2); border-top-color:var(--amber); animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
+  #status p{ color:var(--ink-dim); font-size:14px; margin:0; }
 
-  #execLog{
-    max-height:220px; overflow-y:auto; margin-top:10px;
-    font-size:12px; font-family:ui-monospace, monospace; color:var(--ink-dim);
-    background:var(--surface-2); border-radius:10px; padding:10px 12px;
-  }
-  #execLog div.ok{ color:var(--green); }
-  #execLog div.fail{ color:var(--red); }
-
-  #settings-overlay{
-    position:fixed; inset:0; background:rgba(0,0,0,.6);
-    display:none; align-items:flex-end; z-index:50;
-  }
-  #settings-sheet{
-    width:100%; max-width:560px; margin:0 auto; background:var(--surface); border-radius:20px 20px 0 0;
-    padding:20px 20px calc(20px + env(safe-area-inset-bottom));
-  }
+  #settings-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:50; }
+  #settings-sheet{ width:100%; max-width:560px; margin:0 auto; background:var(--surface); border-radius:20px 20px 0 0; padding:20px 20px calc(20px + env(safe-area-inset-bottom)); }
   #settings-sheet h3{ margin:0 0 4px; font-size:16px; }
-  #settings-sheet input{
-    width:100%; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink);
-    padding:12px 14px; border-radius:12px; font-size:15px; margin:6px 0 16px;
-  }
+  #settings-sheet input{ width:100%; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink); padding:12px 14px; border-radius:12px; font-size:15px; margin:6px 0 16px; }
 </style>
 </head>
 <body>
@@ -138,63 +133,73 @@
   <header>
     <div class="brand">
       <span class="dot"></span>
-      <div>
-        <h1>Box Consolidator</h1>
-        <div class="sub">GameJunkie</div>
-      </div>
+      <h1>Box Consolidator</h1>
     </div>
-    <a class="back" href="./index.html">← Picker Pro</a>
+    <a class="back" id="settingsLink" href="#">⚙ Proxy</a>
   </header>
 
-  <div class="card">
-    <h2>1. Upload a fresh export</h2>
-    <p class="hint">Seller Hub → Active Listings → Export report. Use a recent one so box counts are accurate.</p>
-    <div class="file-drop" id="fileDrop">
-      <div class="icon">📄</div>
-      <div class="fname" id="fileName">Tap to choose CSV file</div>
-      <div class="fsub" id="fileSub">No file selected</div>
-    </div>
-    <input type="file" id="fileInput" accept=".csv">
-  </div>
+  <div class="csv-status" id="csvStatus">Checking data…</div>
 
-  <div class="card">
-    <h2>2. How many boxes do you need?</h2>
-    <p class="hint">DVD shelves: D, EE, F, H, I, J, L (max 22 per box). CD shelves: G, K, O (max 30 per box).</p>
-    <div class="num-row">
-      <div class="num-field">
-        <label>DVD boxes</label>
-        <input type="number" id="dvdTarget" min="0" value="0">
+  <div id="setup">
+    <div class="card">
+      <h2>Update stock data (from your computer)</h2>
+      <p class="hint">Export "Active Listings" from Seller Hub, then choose the file here. Only needs doing on the computer - the phone will read whatever was uploaded last.</p>
+      <div class="file-drop" id="fileDrop">
+        <div class="icon">📄</div>
+        <div class="fname" id="fileName">Tap to choose CSV file</div>
+        <div class="fsub" id="fileSub">No file selected on this device</div>
       </div>
-      <div class="num-field">
-        <label>CD boxes</label>
-        <input type="number" id="cdTarget" min="0" value="0">
-      </div>
+      <input type="file" id="fileInput" accept=".csv">
     </div>
-    <button class="primary" id="planBtn" disabled>Work out a plan</button>
+
+    <div class="card">
+      <h2>How many boxes do you need?</h2>
+      <p class="hint">DVD: D, EE, F, H, I, J, L (max 22/box). CD: G, K, O (max 30/box).</p>
+      <div class="num-row">
+        <div class="num-field">
+          <label>DVD boxes</label>
+          <input type="number" id="dvdTarget" min="0" value="0" inputmode="numeric">
+        </div>
+        <div class="num-field">
+          <label>CD boxes</label>
+          <input type="number" id="cdTarget" min="0" value="0" inputmode="numeric">
+        </div>
+      </div>
+      <button class="primary" id="startBtn">Start</button>
+    </div>
   </div>
 
-  <div id="status" style="display:none;"></div>
-
-  <div id="planResult" style="display:none;">
-
-    <div class="section-label">DVD moves</div>
-    <div id="dvdMoves"></div>
-    <div class="summary-line" id="dvdSummary"></div>
-
-    <div class="section-label">CD moves</div>
-    <div id="cdMoves"></div>
-    <div class="summary-line" id="cdSummary"></div>
-
-    <button class="execute" id="executeBtn">Apply to eBay</button>
-    <button class="secondary" id="printBtn">Print move list</button>
-
-    <div id="execLog" style="display:none;"></div>
+  <div id="status">
+    <div class="spinner"></div>
+    <p id="statusText">Working…</p>
   </div>
 
-  <div class="card" style="margin-top:24px;">
-    <h2>⚙ Proxy connection</h2>
-    <p class="hint" id="proxyStatus">Not connected</p>
-    <button class="secondary" id="settingsBtn">Change proxy URL</button>
+  <div id="moveScreen">
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label"><span id="progressText">0 of 0</span><span id="doneText">0 done</span></div>
+    </div>
+    <div id="moveCard">
+      <div class="move-category" id="moveCategory">DVD</div>
+      <div class="move-boxes">
+        <div class="move-box source" id="moveSource">D42</div>
+        <div class="move-arrow">→</div>
+        <div class="move-box dest" id="moveDest">EE16</div>
+      </div>
+      <div class="move-count"><b id="moveCount">5</b> item(s) to move</div>
+      <div class="move-instruction">Physically move these discs from the source box into the destination box, then tap Done to update eBay.</div>
+    </div>
+    <div id="moveControls">
+      <button class="btn-skip" id="skipBtn">Skip for now</button>
+      <button class="btn-done" id="doneBtn">Done - relabel</button>
+    </div>
+  </div>
+
+  <div id="doneScreen">
+    <div class="glyph">📦</div>
+    <h2>All done!</h2>
+    <p id="doneSummary">Boxes freed up.</p>
+    <button class="primary" id="restartBtn">Start another batch</button>
   </div>
 
 </div>
@@ -202,10 +207,9 @@
 <div id="settings-overlay">
   <div id="settings-sheet">
     <h3>Proxy connection</h3>
-    <p class="hint" style="color:var(--ink-dim); font-size:12.5px;">Same URL as Picker Pro uses.</p>
+    <p style="color:var(--ink-dim); font-size:12.5px; margin:0 0 10px;">Same URL as Picker Pro uses.</p>
     <input id="proxy-url-input" placeholder="https://your-tunnel.trycloudflare.com" autocapitalize="off" autocorrect="off">
     <button class="primary" id="settingsSave">Save</button>
-    <button class="secondary" id="settingsCancel">Cancel</button>
   </div>
 </div>
 
@@ -214,176 +218,211 @@
   'use strict';
 
   const els = {
+    csvStatus: document.getElementById('csvStatus'),
     fileDrop: document.getElementById('fileDrop'),
     fileInput: document.getElementById('fileInput'),
     fileName: document.getElementById('fileName'),
     fileSub: document.getElementById('fileSub'),
     dvdTarget: document.getElementById('dvdTarget'),
     cdTarget: document.getElementById('cdTarget'),
-    planBtn: document.getElementById('planBtn'),
+    startBtn: document.getElementById('startBtn'),
+    setup: document.getElementById('setup'),
     status: document.getElementById('status'),
-    planResult: document.getElementById('planResult'),
-    dvdMoves: document.getElementById('dvdMoves'),
-    cdMoves: document.getElementById('cdMoves'),
-    dvdSummary: document.getElementById('dvdSummary'),
-    cdSummary: document.getElementById('cdSummary'),
-    executeBtn: document.getElementById('executeBtn'),
-    printBtn: document.getElementById('printBtn'),
-    execLog: document.getElementById('execLog'),
-    proxyStatus: document.getElementById('proxyStatus'),
-    settingsBtn: document.getElementById('settingsBtn'),
+    statusText: document.getElementById('statusText'),
+    moveScreen: document.getElementById('moveScreen'),
+    progressFill: document.getElementById('progressFill'),
+    progressText: document.getElementById('progressText'),
+    doneText: document.getElementById('doneText'),
+    moveCategory: document.getElementById('moveCategory'),
+    moveSource: document.getElementById('moveSource'),
+    moveDest: document.getElementById('moveDest'),
+    moveCount: document.getElementById('moveCount'),
+    skipBtn: document.getElementById('skipBtn'),
+    doneBtn: document.getElementById('doneBtn'),
+    doneScreen: document.getElementById('doneScreen'),
+    doneSummary: document.getElementById('doneSummary'),
+    restartBtn: document.getElementById('restartBtn'),
+    settingsLink: document.getElementById('settingsLink'),
     settingsOverlay: document.getElementById('settings-overlay'),
     settingsSave: document.getElementById('settingsSave'),
-    settingsCancel: document.getElementById('settingsCancel'),
     proxyInput: document.getElementById('proxy-url-input'),
   };
 
-  let csvText = null;
-  let currentPlan = null; // { dvdMoves, cdMoves, operations, ... }
+  let queue = [];
+  let doneCount = 0;
+  let totalCount = 0;
 
-  function getProxyUrl(){
-    return localStorage.getItem('picker_proxy_url') || '';
-  }
-  function setProxyUrl(url){
-    localStorage.setItem('picker_proxy_url', url.replace(/\/+$/,''));
-  }
+  function getProxyUrl(){ return localStorage.getItem('picker_proxy_url') || ''; }
+  function setProxyUrl(url){ localStorage.setItem('picker_proxy_url', url.replace(/\/+$/,'')); }
 
-  function refreshProxyStatus(){
-    const url = getProxyUrl();
-    els.proxyStatus.textContent = url ? ('Connected: ' + url) : 'Not connected - tap below to set it up';
-  }
-  refreshProxyStatus();
-
-  els.settingsBtn.addEventListener('click', () => {
+  els.settingsLink.addEventListener('click', (e) => {
+    e.preventDefault();
     els.proxyInput.value = getProxyUrl();
     els.settingsOverlay.style.display = 'flex';
   });
-  els.settingsCancel.addEventListener('click', () => { els.settingsOverlay.style.display = 'none'; });
-  els.settingsOverlay.addEventListener('click', (e) => {
-    if (e.target === els.settingsOverlay) els.settingsOverlay.style.display = 'none';
-  });
+  els.settingsOverlay.addEventListener('click', (e) => { if (e.target === els.settingsOverlay) els.settingsOverlay.style.display = 'none'; });
   els.settingsSave.addEventListener('click', () => {
     setProxyUrl(els.proxyInput.value.trim());
     els.settingsOverlay.style.display = 'none';
-    refreshProxyStatus();
+    refreshCsvStatus();
   });
 
-  // ---------------- File picking ----------------
+  function formatDate(iso){
+    if (!iso) return null;
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' at ' +
+      d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function refreshCsvStatus(){
+    const base = getProxyUrl();
+    if (!base){
+      els.csvStatus.textContent = 'Not connected - tap ⚙ Proxy to set up';
+      return;
+    }
+    try {
+      const res = await fetch(base + '/api/consolidate/csv-status');
+      const data = await res.json();
+      if (!data.uploadedAt){
+        els.csvStatus.innerHTML = 'No stock data uploaded yet - upload a CSV below (from your computer)';
+        els.csvStatus.classList.add('stale');
+      } else {
+        const hoursOld = (Date.now() - new Date(data.uploadedAt).getTime()) / 3600000;
+        els.csvStatus.innerHTML = 'Using data from <b>' + formatDate(data.uploadedAt) + '</b> (' + data.rowCount + ' listings)';
+        els.csvStatus.classList.toggle('stale', hoursOld > 48);
+      }
+    } catch (e){
+      els.csvStatus.textContent = "Couldn't reach the proxy - check ⚙ Proxy settings";
+    }
+  }
+  refreshCsvStatus();
+
   els.fileDrop.addEventListener('click', () => els.fileInput.click());
-  els.fileInput.addEventListener('change', () => {
+  els.fileInput.addEventListener('change', async () => {
     const file = els.fileInput.files[0];
     if (!file) return;
+    const base = getProxyUrl();
+    if (!base){ alert('Set up the proxy connection first (⚙ Proxy).'); return; }
+
+    els.fileDrop.classList.add('has-file');
+    els.fileName.textContent = file.name;
+    els.fileSub.textContent = 'Uploading…';
+
     const reader = new FileReader();
-    reader.onload = (e) => {
-      csvText = e.target.result;
-      els.fileDrop.classList.add('has-file');
-      els.fileName.textContent = file.name;
-      els.fileSub.textContent = 'Ready - ' + Math.round(file.size / 1024) + ' KB';
-      updatePlanButton();
+    reader.onload = async (e) => {
+      try {
+        const res = await fetch(base + '/api/consolidate/upload-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csvText: e.target.result })
+        });
+        if (!res.ok){
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Upload failed');
+        }
+        const meta = await res.json();
+        els.fileSub.textContent = 'Uploaded - ' + meta.rowCount + ' listings';
+        refreshCsvStatus();
+      } catch (err){
+        els.fileSub.textContent = 'Failed: ' + err.message;
+      }
     };
     reader.readAsText(file);
   });
 
-  function updatePlanButton(){
-    els.planBtn.disabled = !csvText;
-  }
+  els.startBtn.addEventListener('click', async () => {
+    const base = getProxyUrl();
+    if (!base){ alert('Set up the proxy connection first (⚙ Proxy).'); return; }
 
-  // ---------------- Plan ----------------
+    const dvdTarget = parseInt(els.dvdTarget.value || '0', 10);
+    const cdTarget = parseInt(els.cdTarget.value || '0', 10);
+    if (dvdTarget <= 0 && cdTarget <= 0){ alert('Enter at least one box you need.'); return; }
+
+    els.setup.style.display = 'none';
+    els.status.style.display = 'flex';
+    els.statusText.textContent = 'Working out the best plan…';
+
+    try {
+      const res = await fetch(base + '/api/consolidate/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dvdTarget, cdTarget })
+      });
+      if (!res.ok){
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || ('Server returned ' + res.status));
+      }
+      const plan = await res.json();
+
+      if (plan.moves.length === 0){
+        els.status.innerHTML = '<p>No moves found. Either your boxes are already full, or there aren\'t enough small boxes to combine.</p><button class="primary" id="backBtn" style="max-width:240px;">Back</button>';
+        document.getElementById('backBtn').addEventListener('click', () => location.reload());
+        return;
+      }
+
+      queue = plan.moves;
+      totalCount = queue.length;
+      doneCount = 0;
+
+      els.status.style.display = 'none';
+      els.moveScreen.style.display = 'flex';
+      showCurrentMove();
+    } catch (err){
+      els.status.innerHTML = '<p>Couldn\'t generate a plan.<br>' + escapeHtml(err.message) + '</p><button class="primary" id="backBtn" style="max-width:240px;">Back</button>';
+      document.getElementById('backBtn').addEventListener('click', () => location.reload());
+    }
+  });
+
   function escapeHtml(s){
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
   }
 
-  function renderMoves(container, moves){
-    container.innerHTML = '';
-    if (moves.length === 0){
-      container.innerHTML = '<div class="summary-line">No moves needed.</div>';
-      return;
-    }
-    moves.forEach(m => {
-      const row = document.createElement('div');
-      row.className = 'move-row';
-      row.innerHTML =
-        '<span class="box-tag">' + escapeHtml(m.source) + '</span>' +
-        '<span class="arrow">→</span>' +
-        '<span class="dest-tag">' + escapeHtml(m.dest) + '</span>' +
-        '<span class="count">' + m.count + ' item' + (m.count === 1 ? '' : 's') + '</span>';
-      container.appendChild(row);
-    });
+  function updateProgress(){
+    const pct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
+    els.progressFill.style.width = pct + '%';
+    els.progressText.textContent = doneCount + ' of ' + totalCount;
+    els.doneText.textContent = doneCount + ' done';
   }
 
-  els.planBtn.addEventListener('click', async () => {
-    const base = getProxyUrl();
-    if (!base){
-      alert('Set up the proxy connection first (bottom of page).');
+  function showCurrentMove(){
+    updateProgress();
+    if (queue.length === 0){
+      els.moveScreen.style.display = 'none';
+      els.doneScreen.style.display = 'flex';
+      els.doneSummary.textContent = doneCount + ' box move(s) completed.';
       return;
     }
-    const dvdTarget = parseInt(els.dvdTarget.value || '0', 10);
-    const cdTarget = parseInt(els.cdTarget.value || '0', 10);
+    const move = queue[0];
+    els.moveCategory.textContent = move.category === 'dvd' ? 'DVD Shelf' : 'CD Shelf';
+    els.moveSource.textContent = move.source;
+    els.moveDest.textContent = move.dest;
+    els.moveCount.textContent = move.count;
+    els.doneBtn.disabled = false;
+    els.doneBtn.textContent = 'Done - relabel';
+  }
 
-    els.status.style.display = 'block';
-    els.status.innerHTML = '<div class="spinner"></div>Working out the best plan…';
-    els.planResult.style.display = 'none';
-    els.planBtn.disabled = true;
-
-    try {
-      const res = await fetch(base + '/api/consolidate/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvText, dvdTarget, cdTarget })
-      });
-      if (!res.ok){
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || ('Server returned ' + res.status));
-      }
-      currentPlan = await res.json();
-
-      els.status.style.display = 'none';
-      els.planResult.style.display = 'block';
-      els.execLog.style.display = 'none';
-      els.executeBtn.disabled = false;
-      els.executeBtn.textContent = 'Apply to eBay';
-
-      renderMoves(els.dvdMoves, currentPlan.dvdMoves);
-      renderMoves(els.cdMoves, currentPlan.cdMoves);
-
-      els.dvdSummary.innerHTML = 'Found <b>' + currentPlan.dvdBoxCount + '</b> DVD box(es) total. ' +
-        'Freeing <b>' + currentPlan.dvdMoves.length + ' of ' + currentPlan.dvdRequested + '</b> requested.' +
-        (currentPlan.dvdMoves.length < currentPlan.dvdRequested ? '<div class="warn">Could not find enough combinable boxes to reach the full target.</div>' : '');
-
-      els.cdSummary.innerHTML = 'Found <b>' + currentPlan.cdBoxCount + '</b> CD box(es) total. ' +
-        'Freeing <b>' + currentPlan.cdMoves.length + ' of ' + currentPlan.cdRequested + '</b> requested.' +
-        (currentPlan.cdMoves.length < currentPlan.cdRequested ? '<div class="warn">Could not find enough combinable boxes to reach the full target.</div>' : '');
-
-    } catch (err){
-      els.status.innerHTML = 'Couldn\'t generate a plan.<br>' + escapeHtml(err.message);
-    } finally {
-      els.planBtn.disabled = false;
-    }
+  els.skipBtn.addEventListener('click', () => {
+    if (queue.length === 0) return;
+    const move = queue.shift();
+    queue.push(move);
+    showCurrentMove();
   });
 
-  // ---------------- Execute ----------------
-  els.executeBtn.addEventListener('click', async () => {
-    if (!currentPlan || !currentPlan.operations || currentPlan.operations.length === 0){
-      alert('No moves to apply.');
-      return;
-    }
-    if (!confirm('This will relabel ' + currentPlan.operations.length + ' item(s) on eBay right now. Continue?')){
-      return;
-    }
-
+  els.doneBtn.addEventListener('click', async () => {
+    if (queue.length === 0) return;
     const base = getProxyUrl();
-    els.executeBtn.disabled = true;
-    els.executeBtn.textContent = 'Applying…';
-    els.execLog.style.display = 'block';
-    els.execLog.innerHTML = 'Sending ' + currentPlan.operations.length + ' update(s) to eBay - this can take a minute…';
+    const move = queue[0];
+
+    els.doneBtn.disabled = true;
+    els.doneBtn.textContent = 'Updating eBay…';
 
     try {
       const res = await fetch(base + '/api/consolidate/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operations: currentPlan.operations })
+        body: JSON.stringify({ operations: move.operations })
       });
       if (!res.ok){
         const body = await res.json().catch(() => ({}));
@@ -391,30 +430,21 @@
       }
       const result = await res.json();
 
-      els.execLog.innerHTML = '';
-      const summary = document.createElement('div');
-      summary.innerHTML = '<b>' + result.succeeded + ' succeeded, ' + result.failed.length + ' failed.</b>';
-      els.execLog.appendChild(summary);
+      if (result.failed && result.failed.length > 0){
+        alert('Some items failed to update:\n' + result.failed.map(f => f.itemId + ': ' + f.error).join('\n'));
+      }
 
-      result.failed.forEach(f => {
-        const line = document.createElement('div');
-        line.className = 'fail';
-        line.textContent = f.itemId + ': ' + f.error;
-        els.execLog.appendChild(line);
-      });
-
-      els.executeBtn.textContent = result.failed.length === 0 ? 'Done ✓' : 'Done (some failed)';
+      queue.shift();
+      doneCount++;
+      showCurrentMove();
     } catch (err){
-      els.execLog.innerHTML = 'Failed to apply changes.<br>' + escapeHtml(err.message);
-      els.executeBtn.disabled = false;
-      els.executeBtn.textContent = 'Apply to eBay';
+      alert("Couldn't update eBay: " + err.message);
+      els.doneBtn.disabled = false;
+      els.doneBtn.textContent = 'Done - relabel';
     }
   });
 
-  // ---------------- Print ----------------
-  els.printBtn.addEventListener('click', () => {
-    window.print();
-  });
+  els.restartBtn.addEventListener('click', () => location.reload());
 
 })();
 </script>
