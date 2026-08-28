@@ -333,6 +333,8 @@
     <p class="hint">The URL of your eBay proxy (Cloudflare Tunnel or local address).</p>
     <label>Proxy URL</label>
     <input id="proxy-url-input" placeholder="https://your-tunnel.trycloudflare.com" autocapitalize="off" autocorrect="off">
+    <label>API Key</label>
+    <input id="api-key-input" placeholder="Set in your .env as PROXY_API_KEY" autocapitalize="off" autocorrect="off">
     <div class="row">
       <button class="cancel" id="settings-cancel">Cancel</button>
       <button class="save" id="settings-save">Save &amp; Reload</button>
@@ -372,6 +374,7 @@
     settingsSave: document.getElementById('settings-save'),
     settingsCancel: document.getElementById('settings-cancel'),
     proxyInput: document.getElementById('proxy-url-input'),
+    apiKeyInput: document.getElementById('api-key-input'),
   };
 
   let rawItems = [];       // items as loaded from the server, in normal pick order
@@ -389,9 +392,27 @@
     localStorage.setItem('picker_proxy_url', url.replace(/\/+$/,''));
   }
 
+  function getApiKey(){
+    return localStorage.getItem('picker_api_key') || '';
+  }
+
+  function setApiKey(key){
+    localStorage.setItem('picker_api_key', key);
+  }
+
+  // Wraps fetch() to always include the API key header, so every call to
+  // the proxy is authenticated the same way without repeating this at
+  // every call site.
+  function apiFetch(path, options){
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, { 'X-GameJunkie-Key': getApiKey() });
+    return fetch(getProxyUrl() + path, options);
+  }
+
   // ---------------- Settings sheet ----------------
   els.settingsBtn.addEventListener('click', () => {
     els.proxyInput.value = getProxyUrl();
+    els.apiKeyInput.value = getApiKey();
     els.settingsOverlay.style.display = 'flex';
   });
   els.settingsCancel.addEventListener('click', () => {
@@ -402,6 +423,7 @@
   });
   els.settingsSave.addEventListener('click', () => {
     setProxyUrl(els.proxyInput.value.trim());
+    setApiKey(els.apiKeyInput.value.trim());
     els.settingsOverlay.style.display = 'none';
     loadPickList();
   });
@@ -430,7 +452,7 @@
     }
     showStatus('Loading pick list…');
     try {
-      const res = await fetch(base + '/api/pick-list');
+      const res = await apiFetch('/api/pick-list');
       if (!res.ok){
         const body = await res.json().catch(()=>({}));
         throw new Error(body.error || ('Server returned ' + res.status));
@@ -443,7 +465,7 @@
       // Pick up anything a teammate's already marked as picked, so it
       // doesn't show up again on this device
       try {
-        const sessionRes = await fetch(base + '/api/session-status');
+        const sessionRes = await apiFetch('/api/session-status');
         if (sessionRes.ok){
           const sessionData = await sessionRes.json();
           (sessionData.picked || []).forEach(id => pickedIds.add(id));
@@ -452,17 +474,17 @@
 
       els.status.style.display = 'none';
       showDirectionSelect();
-      startPolling(base);
+      startPolling();
     } catch (err){
       showError('Couldn\'t reach the proxy.<br>' + escapeHtml(err.message));
     }
   }
 
-  function startPolling(base){
+  function startPolling(){
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
       try {
-        const res = await fetch(base + '/api/session-status');
+        const res = await apiFetch('/api/session-status');
         if (!res.ok) return;
         const data = await res.json();
         let changed = false;
@@ -631,9 +653,8 @@
   }
 
   function reportPick(orderLineItemId){
-    const base = getProxyUrl();
-    if (!base) return;
-    fetch(base + '/api/session-mark', {
+    if (!getProxyUrl()) return;
+    apiFetch('/api/session-mark', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderLineItemId })
@@ -641,9 +662,8 @@
   }
 
   function reportUnpick(orderLineItemId){
-    const base = getProxyUrl();
-    if (!base) return;
-    fetch(base + '/api/session-unmark', {
+    if (!getProxyUrl()) return;
+    apiFetch('/api/session-unmark', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderLineItemId })
