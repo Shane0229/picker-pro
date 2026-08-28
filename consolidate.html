@@ -153,6 +153,16 @@
     </div>
 
     <div class="card">
+      <h2>🔍 Search past relabels</h2>
+      <p class="hint">Look up an item number, or an old/new box code, to see if - and when - it was relabeled by this tool.</p>
+      <div class="num-row" style="margin-top:0;">
+        <input type="text" id="logSearchInput" placeholder="e.g. D42 or 287253472262" style="flex:1; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink); padding:12px 14px; border-radius:12px; font-size:14px;">
+      </div>
+      <button class="primary" id="logSearchBtn">Search</button>
+      <div id="logResults" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
       <h2>How many boxes do you need?</h2>
       <p class="hint">DVD: D, EE, F, H, I, J, L (max 22/box). CD: G, K, O (max 30/box).</p>
       <div class="num-row">
@@ -226,6 +236,9 @@
     dvdTarget: document.getElementById('dvdTarget'),
     cdTarget: document.getElementById('cdTarget'),
     startBtn: document.getElementById('startBtn'),
+    logSearchInput: document.getElementById('logSearchInput'),
+    logSearchBtn: document.getElementById('logSearchBtn'),
+    logResults: document.getElementById('logResults'),
     setup: document.getElementById('setup'),
     status: document.getElementById('status'),
     statusText: document.getElementById('statusText'),
@@ -296,6 +309,42 @@
     }
   }
   refreshCsvStatus();
+
+  async function runLogSearch(){
+    const q = els.logSearchInput.value.trim();
+    if (!q) return;
+    const base = getProxyUrl();
+    if (!base){ alert('Set up the proxy connection first (⚙ Proxy).'); return; }
+
+    els.logResults.innerHTML = '<p style="color:var(--ink-dim); font-size:13px;">Searching…</p>';
+    try {
+      const res = await fetch(base + '/api/consolidate/log-search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.results || data.results.length === 0){
+        els.logResults.innerHTML = '<p style="color:var(--ink-dim); font-size:13px;">No matches found.</p>';
+        return;
+      }
+      els.logResults.innerHTML = '';
+      data.results.forEach(r => {
+        const d = new Date(r.timestamp);
+        const when = d.toLocaleDateString(undefined, { day:'numeric', month:'short' }) + ' ' + d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+        const row = document.createElement('div');
+        row.style.cssText = 'background:var(--surface-2); border-radius:10px; padding:10px 12px; margin-bottom:6px; font-size:12.5px;';
+        row.innerHTML =
+          '<div style="color:var(--ink-dim); font-size:11px;">' + when + ' · item ' + escapeHtml(r.itemId) + '</div>' +
+          '<div style="margin-top:3px;"><span style="color:' + (r.success ? 'var(--green)' : 'var(--red)') + '; font-weight:700;">' +
+            escapeHtml(r.oldSku) + ' → ' + escapeHtml(r.newSku) + '</span>' +
+            (r.success ? '' : ' <span style="color:var(--red);">(failed: ' + escapeHtml(r.error || '') + ')</span>') +
+          '</div>' +
+          '<div style="color:var(--ink-dim); margin-top:2px;">' + escapeHtml(r.title || '') + '</div>';
+        els.logResults.appendChild(row);
+      });
+    } catch (e){
+      els.logResults.innerHTML = '<p style="color:var(--red); font-size:13px;">Search failed: ' + escapeHtml(e.message) + '</p>';
+    }
+  }
+  els.logSearchBtn.addEventListener('click', runLogSearch);
+  els.logSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runLogSearch(); });
 
   els.fileDrop.addEventListener('click', () => els.fileInput.click());
   els.fileInput.addEventListener('change', async () => {
@@ -431,7 +480,11 @@
       const result = await res.json();
 
       if (result.failed && result.failed.length > 0){
-        alert('Some items failed to update:\n' + result.failed.map(f => f.itemId + ': ' + f.error).join('\n'));
+        alert('Some items failed to update - staying on this move so you can retry:\n' +
+          result.failed.map(f => f.itemId + ': ' + f.error).join('\n'));
+        els.doneBtn.disabled = false;
+        els.doneBtn.textContent = 'Retry';
+        return; // don't advance - this move isn't fully done yet
       }
 
       queue.shift();
