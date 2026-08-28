@@ -189,6 +189,7 @@
       <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       <div class="progress-label"><span id="progressText">0 of 0</span><span id="doneText">0 done</span></div>
     </div>
+    <div id="excludedNote" style="display:none; padding:0 18px 8px; font-size:11.5px; color:var(--red);"></div>
     <div id="moveCard">
       <div class="move-category" id="moveCategory">DVD</div>
       <div class="move-boxes">
@@ -219,6 +220,7 @@
     <h3>Proxy connection</h3>
     <p style="color:var(--ink-dim); font-size:12.5px; margin:0 0 10px;">Same URL as Picker Pro uses.</p>
     <input id="proxy-url-input" placeholder="https://your-tunnel.trycloudflare.com" autocapitalize="off" autocorrect="off">
+    <input id="api-key-input" placeholder="API Key (same as Picker Pro)" autocapitalize="off" autocorrect="off">
     <button class="primary" id="settingsSave">Save</button>
   </div>
 </div>
@@ -246,6 +248,7 @@
     progressFill: document.getElementById('progressFill'),
     progressText: document.getElementById('progressText'),
     doneText: document.getElementById('doneText'),
+    excludedNote: document.getElementById('excludedNote'),
     moveCategory: document.getElementById('moveCategory'),
     moveSource: document.getElementById('moveSource'),
     moveDest: document.getElementById('moveDest'),
@@ -259,6 +262,7 @@
     settingsOverlay: document.getElementById('settings-overlay'),
     settingsSave: document.getElementById('settingsSave'),
     proxyInput: document.getElementById('proxy-url-input'),
+    apiKeyInput: document.getElementById('api-key-input'),
   };
 
   let queue = [];
@@ -267,15 +271,26 @@
 
   function getProxyUrl(){ return localStorage.getItem('picker_proxy_url') || ''; }
   function setProxyUrl(url){ localStorage.setItem('picker_proxy_url', url.replace(/\/+$/,'')); }
+  function getApiKey(){ return localStorage.getItem('picker_api_key') || ''; }
+  function setApiKey(key){ localStorage.setItem('picker_api_key', key); }
+
+  // Wraps fetch() to always send the API key header
+  function apiFetch(path, options){
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, { 'X-GameJunkie-Key': getApiKey() });
+    return fetch(getProxyUrl() + path, options);
+  }
 
   els.settingsLink.addEventListener('click', (e) => {
     e.preventDefault();
     els.proxyInput.value = getProxyUrl();
+    els.apiKeyInput.value = getApiKey();
     els.settingsOverlay.style.display = 'flex';
   });
   els.settingsOverlay.addEventListener('click', (e) => { if (e.target === els.settingsOverlay) els.settingsOverlay.style.display = 'none'; });
   els.settingsSave.addEventListener('click', () => {
     setProxyUrl(els.proxyInput.value.trim());
+    setApiKey(els.apiKeyInput.value.trim());
     els.settingsOverlay.style.display = 'none';
     refreshCsvStatus();
   });
@@ -294,7 +309,7 @@
       return;
     }
     try {
-      const res = await fetch(base + '/api/consolidate/csv-status');
+      const res = await apiFetch('/api/consolidate/csv-status');
       const data = await res.json();
       if (!data.uploadedAt){
         els.csvStatus.innerHTML = 'No stock data uploaded yet - upload a CSV below (from your computer)';
@@ -318,7 +333,7 @@
 
     els.logResults.innerHTML = '<p style="color:var(--ink-dim); font-size:13px;">Searching…</p>';
     try {
-      const res = await fetch(base + '/api/consolidate/log-search?q=' + encodeURIComponent(q));
+      const res = await apiFetch('/api/consolidate/log-search?q=' + encodeURIComponent(q));
       const data = await res.json();
       if (!data.results || data.results.length === 0){
         els.logResults.innerHTML = '<p style="color:var(--ink-dim); font-size:13px;">No matches found.</p>';
@@ -360,7 +375,7 @@
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const res = await fetch(base + '/api/consolidate/upload-csv', {
+        const res = await apiFetch('/api/consolidate/upload-csv', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ csvText: e.target.result })
@@ -392,7 +407,7 @@
     els.statusText.textContent = 'Working out the best plan…';
 
     try {
-      const res = await fetch(base + '/api/consolidate/plan', {
+      const res = await apiFetch('/api/consolidate/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dvdTarget, cdTarget })
@@ -412,6 +427,13 @@
       queue = plan.moves;
       totalCount = queue.length;
       doneCount = 0;
+
+      if (plan.excludedCount > 0){
+        els.excludedNote.style.display = 'block';
+        els.excludedNote.textContent = '⚠ ' + plan.excludedCount + ' listing(s) skipped entirely - their quantity doesn\'t line up with their number of locations, so their box counts can\'t be trusted. Worth reviewing these manually.';
+      } else {
+        els.excludedNote.style.display = 'none';
+      }
 
       els.status.style.display = 'none';
       els.moveScreen.style.display = 'flex';
@@ -461,14 +483,13 @@
 
   els.doneBtn.addEventListener('click', async () => {
     if (queue.length === 0) return;
-    const base = getProxyUrl();
     const move = queue[0];
 
     els.doneBtn.disabled = true;
     els.doneBtn.textContent = 'Updating eBay…';
 
     try {
-      const res = await fetch(base + '/api/consolidate/execute', {
+      const res = await apiFetch('/api/consolidate/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operations: move.operations })
@@ -479,9 +500,11 @@
       }
       const result = await res.json();
 
-      if (result.failed && result.failed.length > 0){
-        alert('Some items failed to update - staying on this move so you can retry:\n' +
-          result.failed.map(f => f.itemId + ': ' + f.error).join('\n'));
+      const problems = [...(result.failed || []), ...(result.skipped || [])];
+      if (problems.length > 0){
+        alert('Some items need attention before this move is complete:\n\n' +
+          problems.map(f => f.itemId + ': ' + f.error).join('\n') +
+          '\n\nAnything not listed here has already been updated correctly. Fix the item(s) above (e.g. re-export a fresh CSV if a location genuinely changed), then retry.');
         els.doneBtn.disabled = false;
         els.doneBtn.textContent = 'Retry';
         return; // don't advance - this move isn't fully done yet
