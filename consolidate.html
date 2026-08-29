@@ -70,6 +70,8 @@
     width:100%; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink);
     padding:12px 14px; border-radius:12px; font-size:16px; text-align:center; font-weight:700;
   }
+  .max-hint{ font-size:11px; color:var(--ink-dim); text-align:center; margin-top:5px; min-height:14px; }
+  .max-hint.ready{ color:var(--amber); }
 
   button{ border:none; cursor:pointer; font-weight:700; }
   button.primary{
@@ -169,10 +171,12 @@
         <div class="num-field">
           <label>DVD boxes</label>
           <input type="number" id="dvdTarget" min="0" value="0" inputmode="numeric">
+          <div class="max-hint" id="dvdMaxHint"></div>
         </div>
         <div class="num-field">
           <label>CD boxes</label>
           <input type="number" id="cdTarget" min="0" value="0" inputmode="numeric">
+          <div class="max-hint" id="cdMaxHint"></div>
         </div>
       </div>
       <button class="primary" id="startBtn">Start</button>
@@ -237,6 +241,8 @@
     fileSub: document.getElementById('fileSub'),
     dvdTarget: document.getElementById('dvdTarget'),
     cdTarget: document.getElementById('cdTarget'),
+    dvdMaxHint: document.getElementById('dvdMaxHint'),
+    cdMaxHint: document.getElementById('cdMaxHint'),
     startBtn: document.getElementById('startBtn'),
     logSearchInput: document.getElementById('logSearchInput'),
     logSearchBtn: document.getElementById('logSearchBtn'),
@@ -325,6 +331,25 @@
   }
   refreshCsvStatus();
 
+  async function refreshMaxAvailable(){
+    const base = getProxyUrl();
+    if (!base) return;
+    els.dvdMaxHint.textContent = 'checking…';
+    els.cdMaxHint.textContent = 'checking…';
+    try {
+      const res = await apiFetch('/api/consolidate/max-available');
+      const data = await res.json();
+      els.dvdMaxHint.textContent = 'up to ' + data.dvdMax + ' possible';
+      els.cdMaxHint.textContent = 'up to ' + data.cdMax + ' possible';
+      els.dvdMaxHint.classList.add('ready');
+      els.cdMaxHint.classList.add('ready');
+    } catch (e){
+      els.dvdMaxHint.textContent = '';
+      els.cdMaxHint.textContent = '';
+    }
+  }
+  refreshMaxAvailable();
+
   async function runLogSearch(){
     const q = els.logSearchInput.value.trim();
     if (!q) return;
@@ -387,6 +412,7 @@
         const meta = await res.json();
         els.fileSub.textContent = 'Uploaded - ' + meta.rowCount + ' listings';
         refreshCsvStatus();
+        refreshMaxAvailable();
       } catch (err){
         els.fileSub.textContent = 'Failed: ' + err.message;
       }
