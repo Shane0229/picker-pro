@@ -96,7 +96,9 @@
   .move-box{
     background:var(--surface); border-radius:20px; padding:26px 30px;
     font-size:34px; font-weight:800; text-align:center; min-width:120px;
+    cursor:pointer;
   }
+  .move-box:active{ opacity:0.7; }
   .move-box.source{ color:var(--red); border:2.5px solid var(--red); }
   .move-box.dest{ color:var(--green); border:2.5px solid var(--green); background:rgba(76,175,110,0.08); }
   .move-arrow{ font-size:28px; color:var(--ink-dim); }
@@ -206,7 +208,7 @@
         <div class="move-box dest" id="moveDest">EE16</div>
       </div>
       <div class="move-count"><b id="moveCount">5</b> item(s) to move</div>
-      <div class="move-instruction">Physically move these discs from the source box into the destination box, then tap Done to update eBay.</div>
+      <div class="move-instruction">Physically move these discs from the source box into the destination box, then tap Done to update eBay. Tap either box above to see what's in it.</div>
     </div>
     <div id="moveControls">
       <button class="btn-skip" id="skipBtn">Skip for now</button>
@@ -331,6 +333,16 @@
   });
   els.boxCheckOverlay.addEventListener('click', (e) => { if (e.target === els.boxCheckOverlay) els.boxCheckOverlay.style.display = 'none'; });
   els.boxCheckClose.addEventListener('click', () => { els.boxCheckOverlay.style.display = 'none'; });
+
+  // Opens the box-check panel already filled in and searched for a given
+  // box - used when tapping a box directly on a move card.
+  function openBoxCheck(box){
+    els.boxCheckOverlay.style.display = 'flex';
+    els.boxCheckInput.value = box;
+    runBoxCheck();
+  }
+  els.moveSource.addEventListener('click', () => openBoxCheck(els.moveSource.textContent));
+  els.moveDest.addEventListener('click', () => openBoxCheck(els.moveDest.textContent));
 
   function formatDate(iso){
     if (!iso) return null;
