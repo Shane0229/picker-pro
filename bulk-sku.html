@@ -61,6 +61,10 @@
     padding:12px 14px; border-radius:12px; font-size:15px; margin:6px 0 16px; }
   .bar{ height:8px; background:var(--surface-2); border-radius:6px; overflow:hidden; margin:10px 0; }
   .bar > div{ height:100%; width:0; background:var(--amber); transition:width .3s; }
+  #pairs{ max-height:38vh; overflow-y:auto; }
+  textarea#pasteBox{ width:100%; min-height:110px; background:var(--surface-2); border:1px solid #3A3324; color:var(--ink);
+    padding:12px; border-radius:12px; font-size:14px; font-family:ui-monospace,Menlo,Consolas,monospace; margin-bottom:10px; }
+  .or{ text-align:center; color:var(--ink-dim); font-size:12px; margin:4px 0 10px; }
   .hidden{ display:none; }
 </style>
 </head>
@@ -79,6 +83,15 @@
     <div class="card" id="enterCard">
       <h2>What do you want to change?</h2>
       <p class="hint">Type the old location and the new one. Only that location is swapped — anything else on the listing is left alone (<b>B1 R1/B7 R6</b> → <b>A14/B7 R6</b>). Add more rows to change several at once.</p>
+      <details id="pasteWrap">
+        <summary style="cursor:pointer; color:var(--amber); font-size:14px; margin-bottom:10px;">📋 Load a whole list (paste or upload)</summary>
+        <p class="hint">One change per line: old location, then new. Copy the table straight from Word/Excel, or type <b>B1 R3 &gt; A3</b>. A "From / To" heading line is ignored.</p>
+        <textarea id="pasteBox" placeholder="B1 R3&#9;A3&#10;B2 R3&#9;A3&#10;B1 R4&#9;A4" spellcheck="false" autocapitalize="characters"></textarea>
+        <div class="row-actions" style="margin-bottom:14px;">
+          <button class="ghost" id="loadList">Load list</button>
+          <label class="ghost" style="cursor:pointer;">Upload .csv / .txt<input type="file" id="listFile" accept=".csv,.txt,.tsv" style="display:none"></label>
+        </div>
+      </details>
       <div id="pairs"></div>
       <div class="row-actions">
         <button class="ghost" id="addPair">+ Add another</button>
@@ -190,6 +203,38 @@
   $('addPair').addEventListener('click', () => addPair());
   addPair();
 
+  // ---- load a whole list ----
+  function parseList(text){
+    const out = [], bad = [];
+    text.split(/\r?\n/).forEach(raw => {
+      const line = raw.trim();
+      if (!line) return;
+      let parts = line.split(/\t|\s*(?:->|→|=>|>|=|,|;)\s*|\s{2,}/).map(x => x.replace(/^"|"$/g,'').trim()).filter(Boolean);
+      if (parts.length === 2 && /^from$/i.test(parts[0])) return; // heading
+      if (parts.length !== 2) { bad.push(line); return; }
+      out.push({ from: parts[0], to: parts[1] });
+    });
+    return { out, bad };
+  }
+  function loadList(text){
+    const msg = $('enterMsg'); msg.className = 'msg'; msg.textContent = '';
+    const { out, bad } = parseList(text);
+    if (!out.length) { msg.className = 'msg err'; msg.textContent = "Couldn't find any 'old → new' lines in that."; return; }
+    $('pairs').innerHTML = '';
+    out.forEach(p => addPair(p.from, p.to));
+    msg.className = 'msg ' + (bad.length ? 'err' : 'ok');
+    msg.textContent = out.length + ' changes loaded' + (bad.length ? '. Skipped ' + bad.length + ' line(s) I couldn\'t read: ' + bad.slice(0,3).join(' | ') : '. Check them below, then Preview.');
+    $('pasteWrap').open = false;
+  }
+  $('loadList').addEventListener('click', () => loadList($('pasteBox').value));
+  $('listFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { $('pasteBox').value = r.result; loadList(r.result); };
+    r.readAsText(f);
+    e.target.value = '';
+  });
+
   // ---- preview ----
   let current = null;
   function show(which){
@@ -228,6 +273,7 @@
       '<div class="t">' + esc(m.title) + '</div>' +
       '<div class="sku">' + highlight(m.oldSku, m.newSku) + '</div>' +
       m.warnings.map(w => '<div class="warn">⚠ ' + esc(w) + '</div>').join('') +
+      (m.notes || []).map(n => '<div class="warn" style="color:var(--amber)">ℹ ' + esc(n) + '</div>').join('') +
       '</div>').join('');
     $('applyBtn').disabled = ok === 0;
     $('applyBtn').textContent = 'Apply ' + ok + ' change' + (ok === 1 ? '' : 's') + ' to eBay';
