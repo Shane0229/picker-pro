@@ -129,6 +129,10 @@
   .card .meta-row{
     margin-top:8px; display:flex; gap:8px; align-items:center;
   }
+  .price-chip{
+    background:var(--surface-2); color:var(--ink); font-size:13px;
+    font-weight:800; padding:4px 10px; border-radius:99px;
+  }
   .qty-chip{
     background:var(--surface-2); color:var(--ink-dim); font-size:11.5px;
     font-weight:700; padding:4px 9px; border-radius:99px;
@@ -611,6 +615,7 @@
       '<span class="loc-badge">📍 ' + escapeHtml(item.location) + '</span>' +
       (item.title ? '<div class="title">' + escapeHtml(item.title) + '</div>' : '') +
       '<div class="meta-row">' +
+        (item.price != null ? '<span class="price-chip">$' + Number(item.price).toFixed(2) + '</span>' : '') +
         (item.qty > 1 ? '<span class="qty-chip">Qty ' + item.qty + '</span>' : '') +
         (item.condition ? '<span class="qty-chip">' + escapeHtml(item.condition) + '</span>' : '') +
       '</div>';
