@@ -140,8 +140,6 @@
       <div class="tabs">
         <button class="tab on" data-tab="todo" id="tabTodo">Not ticked</button>
         <button class="tab" data-tab="done" id="tabDone">Ticked</button>
-        <button class="tab" data-tab="else" id="tabElse">Filed elsewhere</button>
-        <button class="tab" data-tab="notl" id="tabNotl">Not listed</button>
       </div>
       <input type="search" id="filterInput" placeholder="Filter by title…" style="margin-bottom:10px;">
       <div class="list" id="listArea"></div>
@@ -266,8 +264,13 @@
   // ---------- start screen ----------
   function renderResume(){
     const locs = savedLocations();
-    $('resumeList').innerHTML = locs.length ? '<div class="section-h">Paused stocktakes on this device</div>' +
-      locs.map(l => '<div class="item"><div class="body"><b>' + esc(l) + '</b></div><button class="ghost" data-resume="' + esc(l) + '">Resume</button> <button class="danger" data-drop="' + esc(l) + '">✕</button></div>').join('') : '';
+    const dl = doneLog(), dk = Object.keys(dl).sort((a, b) => dl[b].at.localeCompare(dl[a].at));
+    let h = '';
+    if (locs.length) h += '<div class="section-h">Paused stocktakes on this device</div>' +
+      locs.map(l => '<div class="item"><div class="body"><b>' + esc(l) + '</b></div><button class="ghost" data-resume="' + esc(l) + '">Resume</button> <button class="danger" data-drop="' + esc(l) + '">✕</button></div>').join('');
+    if (dk.length) h += '<div class="section-h">Completed stocktakes</div>' +
+      dk.map(k => '<div class="item"><div class="body"><b>' + esc(k) + '</b><div class="sku">' + new Date(dl[k].at).toLocaleString() + ' · ' + dl[k].found + ' of ' + dl[k].copies + ' copies found' + (dl[k].changed ? ' · ' + dl[k].changed + ' SKU changes' : '') + '</div></div></div>').join('');
+    $('resumeList').innerHTML = h;
   }
   $('resumeList').addEventListener('click', e => {
     const r = e.target.getAttribute && e.target.getAttribute('data-resume');
@@ -321,8 +324,6 @@
     const todo = S.items.filter(i => !full(i)), done = S.items.filter(full);
     $('tabTodo').textContent = 'Not ticked (' + todo.length + ')';
     $('tabDone').textContent = 'Ticked (' + done.length + ')';
-    $('tabElse').textContent = 'Filed elsewhere (' + S.elsewhere.length + ')';
-    $('tabNotl').textContent = 'Not listed (' + S.notListed.length + ')';
     const q = $('filterInput').value.trim().toLowerCase();
     const flt = a => q ? a.filter(i => (i.title || '').toLowerCase().indexOf(q) >= 0 || (i.sku || '').toLowerCase().indexOf(q) >= 0) : a;
     let html = '';
@@ -334,10 +335,6 @@
           '<div class="sku">' + esc(i.sku) + ' · ' + (i.barcodes.length || (S.newBc && S.newBc[i.itemId]) ? 'barcode ✓' : 'no barcode') + '</div></div>' +
           '<button class="tickbtn' + (full(i) ? ' on' : '') + '" data-tick="' + esc(i.itemId) + '">' + (i.expected > 1 ? n + '/' + i.expected : (full(i) ? '✓' : 'Tick')) + '</button></div>';
       }).join('') || '<div class="hint">Nothing here.</div>';
-    } else if (tab === 'else') {
-      html = S.elsewhere.map(e => '<div class="item"><div class="body"><div class="t">' + esc(e.title) + '</div><div class="sku">SKU ' + esc(e.sku || '(blank)') + '</div><div class="tag">found here, filed under ' + esc(e.sku || 'no location') + '</div></div><button class="danger" data-unelse="' + esc(e.itemId) + '">✕</button></div>').join('') || '<div class="hint">None yet. Scans of items filed under another location land here.</div>';
-    } else {
-      html = S.notListed.map(c => '<div class="item"><div class="body"><div class="t">' + esc(c) + '</div><div class="tag">barcode not in your listings</div></div><button class="danger" data-unnotl="' + esc(c) + '">✕</button></div>').join('') || '<div class="hint">None yet. Barcodes that match no listing land here.</div>';
     }
     $('listArea').innerHTML = html;
   }
@@ -348,10 +345,6 @@
   // manual tick: tap to add a copy; tap a full one to clear it
   $('listArea').addEventListener('click', e => {
     const id = e.target.getAttribute && e.target.getAttribute('data-tick');
-    const ue = e.target.getAttribute && e.target.getAttribute('data-unelse');
-    const un = e.target.getAttribute && e.target.getAttribute('data-unnotl');
-    if (ue) { S.elsewhere = S.elsewhere.filter(x => x.itemId !== ue); saveState(); render(); return; }
-    if (un) { S.notListed = S.notListed.filter(x => x !== un); saveState(); render(); return; }
     if (!id) return;
     const it = S.items.find(i => i.itemId === id); if (!it) return;
     const cur = S.ticks[id] || 0;
@@ -385,21 +378,9 @@
       flash('warn', 'Already ticked every listed copy of <b>' + esc(inBox[0].title) + '</b>. This looks like an extra copy.');
       beep(440, 200); return;
     }
-    // 2. elsewhere in the listings?
-    flash('', 'Checking ' + esc(code) + '…');
-    try {
-      const j = await post('/api/stocktake/lookup', { barcode: code });
-      const m = j.matches[0];
-      if (m) {
-        if (!S.elsewhere.some(x => x.itemId === m.itemId)) S.elsewhere.push({ itemId: m.itemId, title: m.title, sku: m.sku, barcode: code });
-        flash('warn', 'Found here, filed under <b>' + esc(m.sku || 'no location') + '</b>: ' + esc(m.title) + (j.matches.length > 1 ? ' (+' + (j.matches.length - 1) + ' more listings share this barcode)' : ''));
-        beep(520, 220);
-      } else {
-        if (S.notListed.indexOf(code) < 0) S.notListed.push(code);
-        flash('bad', 'Not listed: barcode ' + esc(code) + ' matches no listing.'); beep(200, 300);
-      }
-      saveState(); render();
-    } catch (err) { flash('bad', 'Could not check that barcode: ' + esc(err.message)); beep(200, 300); }
+    // Not one of this box's listings: just say so. No other location is looked up.
+    flash('warn', 'Not on the ' + esc(S.location) + ' list: barcode ' + esc(code));
+    beep(300, 250);
   }
   $('codeGo').addEventListener('click', () => { const v = $('codeInput').value; $('codeInput').value = ''; if (v) handleCode(v, false); });
   $('codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('codeGo').click(); } });
@@ -514,7 +495,7 @@
     stopCamera();
     $('scanMsg').className = 'msg'; $('scanMsg').textContent = 'Building plan…';
     try {
-      plan = await post('/api/stocktake/plan', { location: S.location, ticks: S.ticks, elsewhere: S.elsewhere.map(e => e.itemId) });
+      plan = await post('/api/stocktake/plan', { location: S.location, ticks: S.ticks, elsewhere: [] });
       plan.foundChoice = {}; renderPlan(); show('planCard');
       $('scanMsg').textContent = '';
     } catch (err) { $('scanMsg').className = 'msg err'; $('scanMsg').textContent = err.message; }
@@ -525,23 +506,35 @@
   function renderPlan(){
     const rem = plan.removals, mis = plan.missing, fnd = plan.found;
     $('planSummary').innerHTML = 'Box <b>' + esc(S.location) + '</b>: <b>' + plan.matchedAll + '</b> listings fully found. ' +
-      '<b>' + rem.length + '</b> to remove ' + esc(S.location) + ' from, <b>' + mis.length + '</b> missing (report only), <b>' + fnd.length + '</b> found here but filed elsewhere. ' +
+      '<b>' + rem.length + '</b> to remove ' + esc(S.location) + ' from, <b>' + mis.length + '</b> missing (report only). ' +
       '<br><span style="color:var(--ink-dim);font-size:12.5px">Quantities are not changed. Untick any removal you don\'t want.</span>';
     let h = '';
     h += '<div class="section-h">Remove ' + esc(S.location) + ' from multi-location SKUs (' + rem.length + ')</div>';
     h += rem.map((r, i) => '<div class="item"><div class="body"><div class="t">' + esc(r.title) + '</div><div class="sku">' + skuHtml(r.oldSku, r.newSku) + '</div>' + (r.warning ? '<div class="tag" style="color:var(--red)">' + esc(r.warning) + '</div>' : '') + '</div>' +
       '<input type="checkbox" data-rem="' + i + '" ' + (r.warning ? 'disabled' : 'checked') + ' style="width:22px;height:22px;flex-shrink:0"></div>').join('') || '<div class="hint">None.</div>';
-    h += '<div class="section-h">Found here, filed under another location (' + fnd.length + ')</div>';
-    h += fnd.map((f, i) => '<div class="item" style="display:block"><div class="t">' + esc(f.title) + '</div><div class="sku">Currently ' + esc(f.oldSku || '(blank)') + '</div>' +
-      '<div class="choice"><label><input type="radio" name="f' + i + '" value="leave" checked>Leave</label>' +
-      '<label><input type="radio" name="f' + i + '" value="add">Add ' + esc(S.location) + ' (' + esc(f.addSku) + ')</label>' +
-      '<label><input type="radio" name="f' + i + '" value="only">Set to ' + esc(f.onlySku) + ' only</label></div></div>').join('') || '<div class="hint">None.</div>';
     h += '<div class="section-h">Not found: single-location listings, report only (' + mis.length + ')</div>';
     h += mis.map(m => '<div class="item"><div class="body"><div class="t">' + esc(m.title) + '</div><div class="sku">' + esc(m.sku) + ' · found ' + m.found + ' of ' + m.expected + '</div></div></div>').join('') || '<div class="hint">None.</div>';
-    if (S.notListed.length) h += '<div class="section-h">Barcodes not in your listings (' + S.notListed.length + ')</div>' + S.notListed.map(c => '<div class="item"><div class="body"><div class="sku">' + esc(c) + '</div></div></div>').join('');
     $('planBody').innerHTML = h;
     $('applyBtn').disabled = false;
+    updateApplyLabel();
   }
+
+  const DONE_KEY = 'stocktake_done_v1';
+  function doneLog(){ try { return JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); } catch(e){ return {}; } }
+  function finishStocktake(changed){
+    const loc = S.location;
+    const log = doneLog();
+    log[loc] = { at: new Date().toISOString(), copies: copiesTotal(), found: copiesTicked(), changed: changed, missing: plan ? plan.missing.length : 0 };
+    try { localStorage.setItem(DONE_KEY, JSON.stringify(log)); } catch(e){}
+    clearState(loc); S = null; plan = null;
+    show('startCard'); renderResume();
+    $('startMsg').className = 'msg ok'; $('startMsg').textContent = loc + ' stocktake complete.';
+  }
+  function updateApplyLabel(){
+    const n = collectOps().length;
+    $('applyBtn').textContent = n ? 'Apply ' + n + ' change' + (n === 1 ? '' : 's') + ' to eBay' : 'Finish stocktake (no changes)';
+  }
+  $('planBody').addEventListener('change', updateApplyLabel);
 
   function collectOps(){
     const ops = [];
@@ -558,7 +551,11 @@
 
   $('applyBtn').addEventListener('click', async () => {
     const ops = collectOps();
-    if (!ops.length) { $('planMsg').className = 'msg err'; $('planMsg').textContent = 'No changes selected.'; return; }
+    if (!ops.length) {
+      if (!confirm('No eBay changes selected. Mark the ' + S.location + ' stocktake as complete?')) return;
+      finishStocktake(0);
+      return;
+    }
     if (!confirm('Apply ' + ops.length + ' SKU change' + (ops.length === 1 ? '' : 's') + ' on eBay? Each one uses about 2 eBay calls.')) return;
     show('progressCard'); $('doneBtn').classList.add('hidden'); $('resultList').innerHTML = '';
     $('progressTitle').textContent = 'Applying…'; $('barFill').style.width = '0%';
@@ -578,7 +575,7 @@
       failed.map(s => '<div class="item"><div class="body"><div class="t">' + esc(s.title) + '</div><div class="tag" style="color:var(--red)">Failed: ' + esc(s.error) + '</div></div></div>').join('');
     $('doneBtn').classList.remove('hidden');
     S.applied = true; saveState();
-    if (!skipped.length && !failed.length) { /* clean run: this stocktake is finished */ clearState(S.location); }
+    if (!skipped.length && !failed.length) { const loc = S.location; const log = doneLog(); log[loc] = { at: new Date().toISOString(), copies: copiesTotal(), found: copiesTicked(), changed: ok, missing: plan ? plan.missing.length : 0 }; try { localStorage.setItem(DONE_KEY, JSON.stringify(log)); } catch(e){} clearState(loc); }
   });
   $('doneBtn').addEventListener('click', () => { S = null; show('startCard'); renderResume(); refreshCsvStatus(); });
 
