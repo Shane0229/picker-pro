@@ -408,34 +408,44 @@
   async function startCamera(onCode){
     stopCamera();
     camHandler = onCode;
-    $('camWrap').classList.remove('hidden');
     const video = $('cam');
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-    } catch (e) {
-      $('camWrap').classList.add('hidden');
-      flash('bad', 'Could not open the camera (' + esc(e.message || e.name) + '). Allow camera access for this site, or type the barcode.');
-      return;
-    }
-    video.srcObject = stream; await video.play().catch(() => {});
+    $('camWrap').classList.remove('hidden');
     $('camBtn').textContent = '⏹ Stop camera';
+    // Native detector (Android Chrome). Check it really supports retail barcodes.
+    let det = null;
     if ('BarcodeDetector' in window) {
-      const det = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e'] });
-      camTimer = setInterval(async () => {
-        if (video.readyState < 2) return;
-        try { const r = await det.detect(video); if (r && r.length) camHandler(r[0].rawValue, true); } catch(e){}
-      }, 250);
-    } else if (window.ZXing) {
       try {
-        const hints = new Map(); hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]);
-        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+        const sup = BarcodeDetector.getSupportedFormats ? await BarcodeDetector.getSupportedFormats() : ['ean_13','ean_8','upc_a','upc_e'];
+        const want = ['ean_13','ean_8','upc_a','upc_e'].filter(f => sup.indexOf(f) >= 0);
+        if (want.length) det = new BarcodeDetector({ formats: want });
+      } catch (e) { det = null; }
+    }
+    try {
+      if (det) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        video.srcObject = stream; await video.play().catch(() => {});
         camTimer = setInterval(async () => {
           if (video.readyState < 2) return;
-          try { const r = await zxingReader.decodeFromVideoElement(video); if (r) camHandler(r.getText(), true); } catch(e){}
-        }, 400);
-      } catch (e) { flash('bad', 'Barcode reading is not available in this browser. Type the barcode instead.'); }
-    } else {
-      flash('bad', 'This browser cannot read barcodes from the camera. Type the barcode instead, or use Chrome on Android.');
+          try { const r = await det.detect(video); if (r && r.length) camHandler(r[0].rawValue, true); } catch(e){}
+        }, 250);
+        flash('', 'Camera ready. Hold a barcode inside the box.');
+      } else if (window.ZXing) {
+        // Backup reader: let ZXing own the camera and scan continuously
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints, 300);
+        await zxingReader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, video, (result, err) => {
+          if (result && camHandler) camHandler(result.getText(), true);
+        });
+        flash('', 'Camera ready (backup reader). Hold a barcode inside the box.');
+      } else {
+        stopCamera();
+        flash('bad', 'This browser cannot read barcodes from the camera, and the backup reader did not load. Type the barcode instead, or use Chrome on Android.');
+      }
+    } catch (e) {
+      stopCamera();
+      flash('bad', 'Could not start the camera: ' + esc((e && (e.message || e.name)) || e) + '. Allow camera access for this site, or type the barcode.');
     }
   }
   function stopCamera(){
@@ -443,9 +453,11 @@
     try { if (zxingReader) zxingReader.reset(); } catch(e){}
     zxingReader = null;
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    try { $('cam').srcObject = null; } catch(e){}
     $('camWrap').classList.add('hidden'); $('camBtn').textContent = '📷 Start camera';
   }
-  $('camBtn').addEventListener('click', () => { if (stream) stopCamera(); else startCamera(handleCode); });
+  $('camBtn').addEventListener('click', () => { if ($('camWrap').classList.contains('hidden')) startCamera(handleCode); else stopCamera(); });
+
 
   // ---------- save a barcode for a no-barcode item ----------
   let bcItem = null;
