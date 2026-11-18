@@ -54,8 +54,8 @@
 
   /* scan area */
   #camWrap{ position:relative; background:#000; border-radius:16px; overflow:hidden; margin-bottom:10px; }
-  #camWrap video{ width:100%; max-height:34vh; object-fit:cover; display:block; }
-  #camWrap .aim{ position:absolute; left:10%; right:10%; top:35%; bottom:35%; border:2px solid var(--amber); border-radius:10px; opacity:.8; pointer-events:none; }
+  #camWrap video{ width:100%; max-height:38vh; object-fit:cover; display:block; }
+  #camWrap .aim{ position:absolute; left:8%; right:8%; top:30%; bottom:30%; border:2px solid var(--amber); border-radius:10px; opacity:.8; pointer-events:none; }
   #flash{ padding:12px 14px; border-radius:14px; font-size:14px; line-height:1.35; margin-bottom:10px; background:var(--surface-2); min-height:48px; }
   #flash.ok{ background:rgba(76,175,110,.2); border:1px solid var(--green); }
   #flash.warn{ background:rgba(232,160,60,.2); border:1px solid var(--amber); }
@@ -126,6 +126,7 @@
         <div class="bar"><div id="progBar"></div></div>
       </div>
       <div id="camWrap" class="hidden"><video id="cam" playsinline muted></video><div class="aim"></div></div>
+      <div id="camCtl" class="hidden" style="display:flex;gap:10px;align-items:center;margin:-2px 0 10px;"><button class="ghost" id="torchBtn" style="display:none">🔦 Light</button><input type="range" id="zoomSlider" style="flex:1;display:none" min="1" max="3" step="0.1" value="1"><span id="zoomLbl" style="font-size:12px;color:var(--ink-dim);display:none">Zoom</span></div>
       <div id="flash">Tap <b>Start camera</b> and scan each item, or type a barcode below.</div>
       <div class="scanrow">
         <input type="search" id="codeInput" placeholder="Type or scan a barcode" inputmode="numeric" autocomplete="off">
@@ -331,7 +332,7 @@
         const n = Math.min(i.expected, S.ticks[i.itemId] || 0);
         return '<div class="item' + (full(i) ? ' done' : '') + '"><div class="body"><div class="t">' + esc(i.title) + '</div>' +
           '<div class="sku">' + esc(i.sku) + ' · ' + (i.barcodes.length || (S.newBc && S.newBc[i.itemId]) ? 'barcode ✓' : 'no barcode') + '</div></div>' +
-          '<button class="tickbtn' + (full(i) ? ' on' : '') + '" data-tick="' + esc(i.itemId) + '">' + (i.expected > 1 ? n + '/' + i.expected : (full(i) ? '✓' : 'Here')) + '</button></div>';
+          '<button class="tickbtn' + (full(i) ? ' on' : '') + '" data-tick="' + esc(i.itemId) + '">' + (i.expected > 1 ? n + '/' + i.expected : (full(i) ? '✓' : 'Tick')) + '</button></div>';
       }).join('') || '<div class="hint">Nothing here.</div>';
     } else if (tab === 'else') {
       html = S.elsewhere.map(e => '<div class="item"><div class="body"><div class="t">' + esc(e.title) + '</div><div class="sku">SKU ' + esc(e.sku || '(blank)') + '</div><div class="tag">found here, filed under ' + esc(e.sku || 'no location') + '</div></div><button class="danger" data-unelse="' + esc(e.itemId) + '">✕</button></div>').join('') || '<div class="hint">None yet. Scans of items filed under another location land here.</div>';
@@ -422,12 +423,13 @@
     }
     try {
       if (det) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] }, audio: false });
         video.srcObject = stream; await video.play().catch(() => {});
         camTimer = setInterval(async () => {
           if (video.readyState < 2) return;
           try { const r = await det.detect(video); if (r && r.length) camHandler(r[0].rawValue, true); } catch(e){}
         }, 250);
+        setupCamControls();
         flash('', 'Camera ready. Hold a barcode inside the box.');
       } else if (window.ZXing) {
         // Backup reader: let ZXing own the camera and scan continuously
@@ -435,10 +437,11 @@
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E]);
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         zxingReader = new ZXing.BrowserMultiFormatReader(hints, 300);
-        await zxingReader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, video, (result, err) => {
+        await zxingReader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] }, audio: false }, video, (result, err) => {
           if (result && camHandler) camHandler(result.getText(), true);
         });
-        flash('', 'Camera ready (backup reader). Hold a barcode inside the box.');
+        setTimeout(setupCamControls, 600);
+        flash('', 'Camera ready (backup reader). Hold the barcode flat, about 15-20 cm away, inside the box.');
       } else {
         stopCamera();
         flash('bad', 'This browser cannot read barcodes from the camera, and the backup reader did not load. Type the barcode instead, or use Chrome on Android.');
@@ -448,6 +451,30 @@
       flash('bad', 'Could not start the camera: ' + esc((e && (e.message || e.name)) || e) + '. Allow camera access for this site, or type the barcode.');
     }
   }
+  function camTrack(){
+    const v = $('cam'); const so = v.srcObject;
+    return so && so.getVideoTracks ? so.getVideoTracks()[0] : null;
+  }
+  function setupCamControls(){
+    const t = camTrack(); if (!t || !t.getCapabilities) return;
+    const cap = t.getCapabilities() || {};
+    const ctl = $('camCtl'); ctl.classList.remove('hidden'); ctl.style.display = 'flex';
+    if (cap.torch) { $('torchBtn').style.display = ''; }
+    if (cap.zoom && cap.zoom.max > cap.zoom.min) {
+      const z = $('zoomSlider'); z.min = cap.zoom.min; z.max = Math.min(cap.zoom.max, 5); z.step = cap.zoom.step || 0.1; z.value = cap.zoom.min;
+      z.style.display = ''; $('zoomLbl').style.display = '';
+      // a little zoom helps small DVD barcodes
+      const start = Math.min(cap.zoom.max, Math.max(cap.zoom.min, 1.5));
+      z.value = start; t.applyConstraints({ advanced: [{ zoom: start }] }).catch(() => {});
+    }
+    try { t.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}); } catch(e){}
+  }
+  let torchOn = false;
+  $('torchBtn').addEventListener('click', () => { const t = camTrack(); if (!t) return; torchOn = !torchOn; t.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = false; }); });
+  $('zoomSlider').addEventListener('input', e => { const t = camTrack(); if (t) t.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] }).catch(() => {}); });
+  // tap the picture to ask the camera to refocus
+  $('cam').addEventListener('click', () => { const t = camTrack(); if (t) t.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}); });
+
   function stopCamera(){
     if (camTimer) { clearInterval(camTimer); camTimer = null; }
     try { if (zxingReader) zxingReader.reset(); } catch(e){}
@@ -455,6 +482,7 @@
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
     try { $('cam').srcObject = null; } catch(e){}
     $('camWrap').classList.add('hidden'); $('camBtn').textContent = '📷 Start camera';
+    try { $('camCtl').classList.add('hidden'); $('camCtl').style.display = 'none'; torchOn = false; } catch(e){}
   }
   $('camBtn').addEventListener('click', () => { if ($('camWrap').classList.contains('hidden')) startCamera(handleCode); else stopCamera(); });
 
